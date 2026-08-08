@@ -7,7 +7,6 @@ import adminRouter from "./routes/admin";
 import configRouter from "./routes/config";
 
 const app = express();
-const PORT = Number(process.env.PORT) || 4000;
 
 app.use(cors());
 app.use(express.json());
@@ -22,6 +21,11 @@ app.use("/api/routes", routesRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/config", configRouter);
 
-app.listen(PORT, () => {
-  console.log(`🚕 Taxi Collector backend running on http://localhost:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  const PORT = Number(process.env.PORT) || 4000;
+  app.listen(PORT, () => {
+    console.log(`🚕 Taxi Collector backend running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
