@@ -15,6 +15,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<{ data: T; 
 }
 
 const DEMO_ADMIN_ID = 8197456094;
+const CLIENT_ADMIN_IDS = [8197456094];
 
 function currentTelegramId(): number | undefined {
   const tgId = telegram.getUser()?.id;
@@ -48,10 +49,15 @@ export const api = {
   },
   channels: () => request<Channel[]>("/api/channels"),
   routes: () => request<RouteInfo[]>("/api/routes"),
-  config: () => {
+  config: async () => {
     const tgId = currentTelegramId();
     const qs = tgId ? `?telegram_id=${tgId}` : "";
-    return request<AppConfig>(`/api/config${qs}`);
+    const r = await request<AppConfig>(`/api/config${qs}`);
+    if (r.ok && r.data) return r;
+    return {
+      ok: false,
+      data: { cities: [], postLimit: 100, keywords: [], plans: [], isAdmin: Boolean(tgId && CLIENT_ADMIN_IDS.includes(tgId)) },
+    };
   },
 
   admin: {

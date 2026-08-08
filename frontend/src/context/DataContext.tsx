@@ -144,10 +144,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void api.config().then((res) => {
-      if (res.ok) setConfig(res.data);
+      if (res.ok && res.data) setConfig(res.data);
+      const isAdmin = res.data?.isAdmin ?? false;
       setProfile((prev) => {
-        if (prev) return { ...prev, isAdmin: res.ok ? res.data.isAdmin : prev.isAdmin };
-        return defaultProfile(res.ok ? res.data.isAdmin : false);
+        if (prev) return { ...prev, isAdmin };
+        return defaultProfile(isAdmin);
       });
     });
     void refresh();
