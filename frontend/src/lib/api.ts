@@ -16,23 +16,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<{ data: T; 
 
 const DEMO_ADMIN_ID = 8197456094;
 const CLIENT_ADMIN_IDS = [8197456094];
+const CLIENT_ADMIN_USERNAMES = ["anvarovmuhammadamin"];
 
-function currentTelegramId(): number | undefined {
-  const tgId = telegram.getUser()?.id;
-  if (tgId) return tgId;
+function currentTelegram(): { id?: number; username?: string } | undefined {
+  const user = telegram.getUser();
+  if (user) return { id: user.id, username: user.username };
   if (!telegram.isInTelegram && ["localhost", "127.0.0.1"].includes(window.location.hostname)) {
-    return DEMO_ADMIN_ID;
+    return { id: DEMO_ADMIN_ID };
   }
   return undefined;
 }
 
+function isClientAdmin(me?: { id?: number; username?: string }): boolean {
+  if (!me) return false;
+  if (me.id && CLIENT_ADMIN_IDS.includes(me.id)) return true;
+  if (me.username && CLIENT_ADMIN_USERNAMES.includes(me.username.toLowerCase())) return true;
+  return false;
+}
+
 function adminInit(method: string, body?: unknown): RequestInit {
-  const tgId = currentTelegramId();
+  const me = currentTelegram();
   return {
     method,
     headers: {
       "Content-Type": "application/json",
-      ...(tgId ? { "x-telegram-id": String(tgId) } : {}),
+      ...(me?.id ? { "x-telegram-id": String(me.id) } : {}),
+      ...(me?.username ? { "x-telegram-username": me.username } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   };
@@ -50,13 +59,16 @@ export const api = {
   channels: () => request<Channel[]>("/api/channels"),
   routes: () => request<RouteInfo[]>("/api/routes"),
   config: async () => {
-    const tgId = currentTelegramId();
-    const qs = tgId ? `?telegram_id=${tgId}` : "";
-    const r = await request<AppConfig>(`/api/config${qs}`);
+    const me = currentTelegram();
+    const params = new URLSearchParams();
+    if (me?.id) params.set("telegram_id", String(me.id));
+    if (me?.username) params.set("telegram_username", me.username);
+    const qs = params.toString();
+    const r = await request<AppConfig>(`/api/config${qs ? `?${qs}` : ""}`);
     if (r.ok && r.data) return r;
     return {
       ok: false,
-      data: { cities: [], postLimit: 100, keywords: [], plans: [], isAdmin: Boolean(tgId && CLIENT_ADMIN_IDS.includes(tgId)) },
+      data: { cities: [], postLimit: 100, keywords: [], plans: [], isAdmin: isClientAdmin(me) },
     };
   },
 

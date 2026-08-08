@@ -4,7 +4,8 @@ import { sendTelegramMessage } from "../services/delivery";
 
 const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
   const tgId = req.header("x-telegram-id");
-  if (store.isAdmin(tgId)) {
+  const tgUsername = req.header("x-telegram-username");
+  if (store.isAdmin(tgId, tgUsername)) {
     return next();
   }
   return res.status(403).json({ error: "Ruxsat yo'q" });

@@ -5,7 +5,8 @@ const router = Router();
 
 router.get("/", (req, res) => {
   const tgId = req.query.telegram_id as string | undefined;
-  res.json(store.getConfig(tgId));
+  const tgUsername = req.query.telegram_username as string | undefined;
+  res.json(store.getConfig(tgId, tgUsername));
 });
 
 export default router;

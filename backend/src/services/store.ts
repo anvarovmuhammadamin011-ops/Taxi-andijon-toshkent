@@ -30,6 +30,11 @@ export const DEFAULT_ADMIN_IDS = (process.env.ADMIN_IDS ?? "8197456094")
   .map((s) => Number(s.trim()))
   .filter((n) => !Number.isNaN(n));
 
+export const DEFAULT_ADMIN_USERNAMES = (process.env.ADMIN_USERNAMES ?? "anvarovmuhammadamin")
+  .split(",")
+  .map((s) => s.trim().replace(/^@/, "").toLowerCase())
+  .filter(Boolean);
+
 const DEFAULT_DELIVERY_CONFIG: DeliveryConfig = {
   vipDelayMin: 5,
   regularDelayMin: 8,
@@ -72,6 +77,7 @@ class Store {
   private keywords: string[];
   private postLimit: number;
   private adminIds: number[] = [...DEFAULT_ADMIN_IDS];
+  private adminUsernames: string[] = [...DEFAULT_ADMIN_USERNAMES];
   private seq: number;
   private dseq: number;
   private deliveryTargets: DeliveryTarget[];
@@ -124,9 +130,11 @@ class Store {
     });
   }
 
-  isAdmin(telegramId?: number | string): boolean {
+  isAdmin(telegramId?: number | string, telegramUsername?: string): boolean {
     const n = Number(telegramId);
-    return this.adminIds.includes(n);
+    if (this.adminIds.includes(n)) return true;
+    const u = String(telegramUsername ?? "").replace(/^@/, "").toLowerCase();
+    return u ? this.adminUsernames.includes(u) : false;
   }
 
   getPosts(query?: string, route?: string, channel?: string, since?: string): Post[] {
@@ -334,13 +342,13 @@ class Store {
     };
   }
 
-  getConfig(telegramId?: number | string): AppConfig {
+  getConfig(telegramId?: number | string, telegramUsername?: string): AppConfig {
     return {
       cities: ["Toshkent", "Andijon", "Haqqulobod", "Namangan", "Farg'ona", "Qo'qon"],
       postLimit: this.postLimit,
       keywords: this.keywords,
       plans: demoPlans,
-      isAdmin: this.isAdmin(telegramId),
+      isAdmin: this.isAdmin(telegramId, telegramUsername),
     };
   }
 
