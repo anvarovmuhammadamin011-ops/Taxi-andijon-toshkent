@@ -1,0 +1,65 @@
+import { AppConfig, AppUser, Channel, DashboardStats, IncomingResult, Post, RevenueStats, RouteInfo } from "../types";
+import { telegram } from "./telegram";
+
+async function request<T>(path: string, init?: RequestInit): Promise<{ data: T; ok: boolean }> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(path, { ...init, signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return { data: undefined as T, ok: false };
+    return { data: (await res.json()) as T, ok: true };
+  } catch {
+    return { data: undefined as T, ok: false };
+  }
+}
+
+function adminInit(method: string, body?: unknown): RequestInit {
+  const tgId = telegram.getUser()?.id;
+  return {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(tgId ? { "x-telegram-id": String(tgId) } : {}),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  };
+}
+
+export const api = {
+  posts: (q = "", route = "", since = "") => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (route) params.set("route", route);
+    if (since) params.set("since", since);
+    const qs = params.toString();
+    return request<Post[]>(`/api/posts${qs ? `?${qs}` : ""}`);
+  },
+  channels: () => request<Channel[]>("/api/channels"),
+  routes: () => request<RouteInfo[]>("/api/routes"),
+  config: (telegramId?: number) => {
+    const qs = telegramId ? `?telegram_id=${telegramId}` : "";
+    return request<AppConfig>(`/api/config${qs}`);
+  },
+
+  admin: {
+    dashboard: () => request<DashboardStats>("/api/admin/dashboard", adminInit("GET")),
+    channels: () => request<Channel[]>("/api/admin/channels", adminInit("GET")),
+    addChannel: (title: string, url: string) =>
+      request<Channel>("/api/admin/channels", adminInit("POST", { title, url })),
+    toggleChannel: (id: string, isActive: boolean) =>
+      request<Channel>(`/api/admin/channels/${id}`, adminInit("PATCH", { isActive })),
+    deleteChannel: (id: string) => request<{ ok: boolean }>(`/api/admin/channels/${id}`, adminInit("DELETE")),
+    users: () => request<AppUser[]>("/api/admin/users", adminInit("GET")),
+    blockUser: (id: string, isBlocked: boolean) =>
+      request<AppUser>(`/api/admin/users/${id}`, adminInit("PATCH", { isBlocked })),
+    posts: (q = "") => request<Post[]>(`/api/admin/posts${q ? `?q=${encodeURIComponent(q)}` : ""}`, adminInit("GET")),
+    deletePost: (id: string) => request<{ ok: boolean }>(`/api/admin/posts/${id}`, adminInit("DELETE")),
+    revenue: () => request<RevenueStats>("/api/admin/revenue", adminInit("GET")),
+    keywords: () => request<string[]>("/api/admin/keywords", adminInit("GET")),
+    addKeyword: (keyword: string) => request<string[]>("/api/admin/keywords", adminInit("POST", { keyword })),
+    removeKeyword: (kw: string) => request<string[]>(`/api/admin/keywords/${encodeURIComponent(kw)}`, adminInit("DELETE")),
+    setLimit: (postLimit: number) => request<{ postLimit: number }>("/api/admin/config", adminInit("PATCH", { postLimit })),
+    simulate: () => request<IncomingResult>("/api/admin/simulate", adminInit("POST")),
+  },
+};
