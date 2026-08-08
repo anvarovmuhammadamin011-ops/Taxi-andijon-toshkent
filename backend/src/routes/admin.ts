@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { store } from "../services/store";
+import { sendTelegramMessage } from "../services/delivery";
 
 const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
   const tgId = req.header("x-telegram-id");
@@ -89,6 +90,81 @@ router.patch("/config", (req, res) => {
 router.post("/simulate", (_req, res) => {
   const result = store.simulateIncoming();
   res.status(result.status === "new" ? 201 : 200).json(result);
+});
+
+router.get("/delivery/targets", (_req, res) => {
+  res.json(store.getDeliveryTargets());
+});
+
+router.post("/delivery/targets", (req, res) => {
+  const { telegramId, channelUsername, channelTitle, tier } = req.body ?? {};
+  if (!telegramId || !channelUsername) {
+    return res.status(400).json({ error: "telegramId va channelUsername kerak" });
+  }
+  const target = store.addDeliveryTarget({
+    telegramId: Number(telegramId),
+    channelUsername: String(channelUsername),
+    channelTitle: channelTitle ? String(channelTitle) : undefined,
+    tier: tier === "priority" || tier === "vip" || tier === "regular" ? tier : "regular",
+  });
+  res.status(201).json(target);
+});
+
+router.patch("/delivery/targets/:id", (req, res) => {
+  const target = store.setDeliveryTarget(req.params.id, {
+    channelUsername: req.body?.channelUsername,
+    channelTitle: req.body?.channelTitle,
+    tier: req.body?.tier,
+    isActive: req.body?.isActive,
+  });
+  if (!target) return res.status(404).json({ error: "Target topilmadi" });
+  res.json(target);
+});
+
+router.delete("/delivery/targets/:id", (req, res) => {
+  store.deleteDeliveryTarget(req.params.id);
+  res.json({ ok: true });
+});
+
+router.post("/delivery/targets/:id/test", async (req, res) => {
+  const target = store.getDeliveryTargets().find((t) => t.id === req.params.id);
+  if (!target) return res.status(404).json({ error: "Target topilmadi" });
+  if (!target.channelUsername) {
+    return res.status(400).json({ error: "Kanal username o'rnatilmagan" });
+  }
+  const result = await sendTelegramMessage(
+    target.channelUsername,
+    `🔔 Test xabar: "${target.channelTitle}" kanaliga ulanish ishlayapti!\nBot: @ilyosakataxibot`
+  );
+  res.status(result.ok ? 200 : 400).json(result);
+});
+
+router.get("/delivery/tasks", (_req, res) => {
+  res.json(store.getDeliveryTasks(100));
+});
+
+router.patch("/delivery/tasks/:id/send", (req, res) => {
+  const task = store.forceSendTask(req.params.id);
+  if (!task) return res.status(404).json({ error: "Vazifa topilmadi" });
+  res.json(task);
+});
+
+router.get("/delivery/config", (_req, res) => {
+  res.json({ ...store.getDeliveryConfig(), hasToken: Boolean(process.env.BOT_TOKEN) });
+});
+
+router.patch("/delivery/config", (req, res) => {
+  const cfg = store.setDeliveryConfig({
+    vipDelayMin: req.body?.vipDelayMin,
+    regularDelayMin: req.body?.regularDelayMin,
+    priorityDelaySec: req.body?.priorityDelaySec,
+  });
+  res.json(cfg);
+});
+
+router.delete("/delivery/tasks/finished", (_req, res) => {
+  store.clearFinishedTasks();
+  res.json({ ok: true });
 });
 
 export default router;

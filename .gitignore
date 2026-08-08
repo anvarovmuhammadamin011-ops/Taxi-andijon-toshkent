@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 *.log
+Public/
+bot/
+backend/.env
+backend/data/

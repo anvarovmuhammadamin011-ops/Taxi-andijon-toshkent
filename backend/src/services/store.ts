@@ -3,6 +3,10 @@ import {
   AppUser,
   Channel,
   DashboardStats,
+  DeliveryConfig,
+  DeliveryTarget,
+  DeliveryTargetInput,
+  DeliveryTask,
   IncomingResult,
   Post,
   RevenueStats,
@@ -18,22 +22,107 @@ import {
 } from "../data/demo";
 import { parsePost } from "./parser";
 import { findDuplicates } from "./duplicate";
+import { loadDb, saveDb } from "./persistence";
 
 export const DEFAULT_POST_LIMIT = 100;
-export const DEFAULT_ADMIN_IDS = (process.env.ADMIN_IDS ?? "100000001")
+export const DEFAULT_ADMIN_IDS = (process.env.ADMIN_IDS ?? "8197456094")
   .split(",")
   .map((s) => Number(s.trim()))
   .filter((n) => !Number.isNaN(n));
 
+const DEFAULT_DELIVERY_CONFIG: DeliveryConfig = {
+  vipDelayMin: 5,
+  regularDelayMin: 8,
+  priorityDelaySec: 0,
+};
+
+function defaultTargets(): DeliveryTarget[] {
+  return [
+    {
+      id: "t1",
+      telegramId: 8877452838,
+      channelUsername: "",
+      channelTitle: "Prioritet kanal",
+      tier: "priority",
+      isActive: true,
+      addedAt: new Date().toISOString(),
+    },
+  ];
+}
+
+interface DbState {
+  posts: Post[];
+  channels: Channel[];
+  users: AppUser[];
+  revenue: RevenueStats;
+  keywords: string[];
+  postLimit: number;
+  seq: number;
+  dseq: number;
+  deliveryTargets: DeliveryTarget[];
+  deliveryQueue: DeliveryTask[];
+  deliveryConfig: DeliveryConfig;
+}
+
 class Store {
-  private posts: Post[] = [...demoPosts];
-  private channels: Channel[] = [...demoChannels];
-  private users: AppUser[] = [...demoUsers];
-  private revenue: RevenueStats = { ...demoRevenue, history: [...demoRevenue.history] };
-  private keywords: string[] = [...demoKeywords];
-  private postLimit = DEFAULT_POST_LIMIT;
+  private posts: Post[];
+  private channels: Channel[];
+  private users: AppUser[];
+  private revenue: RevenueStats;
+  private keywords: string[];
+  private postLimit: number;
   private adminIds: number[] = [...DEFAULT_ADMIN_IDS];
-  private seq = demoPosts.length + 100;
+  private seq: number;
+  private dseq: number;
+  private deliveryTargets: DeliveryTarget[];
+  private deliveryQueue: DeliveryTask[];
+  private deliveryConfig: DeliveryConfig;
+
+  constructor() {
+    const db = loadDb<DbState>();
+    if (db) {
+      this.posts = db.posts ?? [...demoPosts];
+      this.channels = db.channels ?? [...demoChannels];
+      this.users = db.users ?? [...demoUsers];
+      this.revenue = db.revenue ?? { ...demoRevenue, history: [...demoRevenue.history] };
+      this.keywords = db.keywords ?? [...demoKeywords];
+      this.postLimit = db.postLimit ?? DEFAULT_POST_LIMIT;
+      this.seq = db.seq ?? demoPosts.length + 100;
+      this.dseq = db.dseq ?? 100;
+      this.deliveryTargets = db.deliveryTargets ?? defaultTargets();
+      this.deliveryQueue = db.deliveryQueue ?? [];
+      this.deliveryConfig = db.deliveryConfig ?? { ...DEFAULT_DELIVERY_CONFIG };
+    } else {
+      this.posts = [...demoPosts];
+      this.channels = [...demoChannels];
+      this.users = [...demoUsers];
+      this.revenue = { ...demoRevenue, history: [...demoRevenue.history] };
+      this.keywords = [...demoKeywords];
+      this.postLimit = DEFAULT_POST_LIMIT;
+      this.seq = demoPosts.length + 100;
+      this.dseq = 100;
+      this.deliveryTargets = defaultTargets();
+      this.deliveryQueue = [];
+      this.deliveryConfig = { ...DEFAULT_DELIVERY_CONFIG };
+    }
+    this.save();
+  }
+
+  private save(): void {
+    saveDb<DbState>({
+      posts: this.posts,
+      channels: this.channels,
+      users: this.users,
+      revenue: this.revenue,
+      keywords: this.keywords,
+      postLimit: this.postLimit,
+      seq: this.seq,
+      dseq: this.dseq,
+      deliveryTargets: this.deliveryTargets,
+      deliveryQueue: this.deliveryQueue,
+      deliveryConfig: this.deliveryConfig,
+    });
+  }
 
   isAdmin(telegramId?: number | string): boolean {
     const n = Number(telegramId);
@@ -85,18 +174,21 @@ class Store {
       addedAt: new Date().toISOString(),
     };
     this.channels.push(channel);
+    this.save();
     return channel;
   }
 
   setChannelActive(id: string, isActive: boolean): Channel | undefined {
     const ch = this.channels.find((c) => c.id === id);
     if (ch) ch.isActive = isActive;
+    this.save();
     return ch;
   }
 
   deleteChannel(id: string): void {
     this.channels = this.channels.filter((c) => c.id !== id);
     this.posts = this.posts.filter((p) => p.channelId !== id);
+    this.save();
   }
 
   getRoutes() {
@@ -165,6 +257,8 @@ class Store {
 
     this.posts.unshift(candidate);
     this.enforceLimit(candidate.route);
+    this.save();
+    this.queueDeliveries(candidate);
     return { raw, parsed, status: "new", post: candidate };
   }
 
@@ -190,6 +284,7 @@ class Store {
     for (const route of new Set(this.posts.map((p) => p.route))) {
       this.enforceLimit(route);
     }
+    this.save();
   }
 
   getPostLimit(): number {
@@ -199,7 +294,9 @@ class Store {
   deletePost(id: string): boolean {
     const before = this.posts.length;
     this.posts = this.posts.filter((p) => p.id !== id);
-    return this.posts.length < before;
+    const ok = this.posts.length < before;
+    this.save();
+    return ok;
   }
 
   getUsers(): AppUser[] {
@@ -209,6 +306,7 @@ class Store {
   setUserBlocked(id: string, blocked: boolean): AppUser | undefined {
     const u = this.users.find((x) => x.id === id);
     if (u) u.isBlocked = blocked;
+    this.save();
     return u;
   }
 
@@ -249,14 +347,135 @@ class Store {
   addKeyword(kw: string): void {
     const k = kw.trim();
     if (k && !this.keywords.includes(k)) this.keywords.push(k);
+    this.save();
   }
 
   removeKeyword(kw: string): void {
     this.keywords = this.keywords.filter((k) => k !== kw);
+    this.save();
   }
 
   getKeywords(): string[] {
     return this.keywords;
+  }
+
+  getDeliveryTargets(): DeliveryTarget[] {
+    return this.deliveryTargets;
+  }
+
+  addDeliveryTarget(input: DeliveryTargetInput): DeliveryTarget {
+    const target: DeliveryTarget = {
+      id: "t" + (this.deliveryTargets.length + 200),
+      telegramId: Number(input.telegramId),
+      channelUsername: String(input.channelUsername ?? "").trim().replace(/^@/, ""),
+      channelTitle: String(input.channelTitle ?? input.channelUsername ?? "Kanal"),
+      tier: input.tier ?? "regular",
+      isActive: true,
+      addedAt: new Date().toISOString(),
+    };
+    this.deliveryTargets.push(target);
+    this.save();
+    return target;
+  }
+
+  setDeliveryTarget(id: string, patch: Partial<DeliveryTarget>): DeliveryTarget | undefined {
+    const t = this.deliveryTargets.find((x) => x.id === id);
+    if (!t) return undefined;
+    if (patch.channelUsername !== undefined) t.channelUsername = patch.channelUsername.trim().replace(/^@/, "");
+    if (patch.channelTitle !== undefined) t.channelTitle = patch.channelTitle;
+    if (patch.tier !== undefined) t.tier = patch.tier;
+    if (patch.isActive !== undefined) t.isActive = Boolean(patch.isActive);
+    this.save();
+    return t;
+  }
+
+  deleteDeliveryTarget(id: string): void {
+    this.deliveryTargets = this.deliveryTargets.filter((x) => x.id !== id);
+    this.save();
+  }
+
+  getDeliveryConfig(): DeliveryConfig {
+    return { ...this.deliveryConfig };
+  }
+
+  setDeliveryConfig(patch: Partial<DeliveryConfig>): DeliveryConfig {
+    if (typeof patch.vipDelayMin === "number") {
+      this.deliveryConfig.vipDelayMin = Math.max(1, Math.min(60, Math.floor(patch.vipDelayMin)));
+    }
+    if (typeof patch.regularDelayMin === "number") {
+      this.deliveryConfig.regularDelayMin = Math.max(1, Math.min(60, Math.floor(patch.regularDelayMin)));
+    }
+    if (typeof patch.priorityDelaySec === "number") {
+      this.deliveryConfig.priorityDelaySec = Math.max(0, Math.min(300, Math.floor(patch.priorityDelaySec)));
+    }
+    this.save();
+    return { ...this.deliveryConfig };
+  }
+
+  queueDeliveries(post: Post): DeliveryTask[] {
+    const tasks: DeliveryTask[] = [];
+    const now = Date.now();
+    for (const t of this.deliveryTargets) {
+      if (!t.isActive || !t.channelUsername) continue;
+      let delayMs = 0;
+      if (t.tier === "vip") delayMs = this.deliveryConfig.vipDelayMin * 60_000;
+      else if (t.tier === "regular") delayMs = this.deliveryConfig.regularDelayMin * 60_000;
+      else delayMs = this.deliveryConfig.priorityDelaySec * 1000;
+      tasks.push({
+        id: "d" + ++this.dseq,
+        postId: post.id,
+        postRoute: post.route,
+        postText: post.text,
+        channelUsername: t.channelUsername,
+        channelTitle: t.channelTitle,
+        telegramId: t.telegramId,
+        tier: t.tier,
+        dueAt: new Date(now + delayMs).toISOString(),
+        status: "pending",
+        attempts: 0,
+      });
+    }
+    if (tasks.length > 0) {
+      this.deliveryQueue = [...tasks, ...this.deliveryQueue];
+      this.save();
+    }
+    return tasks;
+  }
+
+  getDeliveryTasks(limit = 50): DeliveryTask[] {
+    return this.deliveryQueue.slice(0, limit);
+  }
+
+  markTaskResult(id: string, ok: boolean, error?: string): void {
+    const t = this.deliveryQueue.find((x) => x.id === id);
+    if (!t) return;
+    t.attempts++;
+    if (ok) {
+      t.status = "sent";
+      t.sentAt = new Date().toISOString();
+      t.error = undefined;
+    } else {
+      t.status = t.attempts >= 3 ? "failed" : "pending";
+      t.error = error;
+      if (t.status === "pending") {
+        t.dueAt = new Date(Date.now() + 60_000).toISOString();
+      }
+    }
+    this.save();
+  }
+
+  forceSendTask(id: string): DeliveryTask | undefined {
+    const t = this.deliveryQueue.find((x) => x.id === id);
+    if (!t) return undefined;
+    t.dueAt = new Date().toISOString();
+    t.status = "pending";
+    this.save();
+    return t;
+  }
+
+  clearFinishedTasks(): void {
+    this.deliveryQueue = this.deliveryQueue.filter((x) => x.status === "pending");
+    this.save();
   }
 }
 

@@ -108,3 +108,44 @@ export interface IncomingResult {
   post?: Post;
   duplicatedFrom?: Post;
 }
+
+export type DeliveryTier = "priority" | "vip" | "regular";
+
+export interface DeliveryTarget {
+  id: string;
+  telegramId: number;
+  channelUsername: string;
+  channelTitle: string;
+  tier: DeliveryTier;
+  isActive: boolean;
+  addedAt: string;
+}
+
+export interface DeliveryTask {
+  id: string;
+  postId: string;
+  postRoute: string;
+  postText: string;
+  channelUsername: string;
+  channelTitle: string;
+  telegramId: number;
+  tier: DeliveryTier;
+  dueAt: string;
+  status: "pending" | "sent" | "failed";
+  attempts: number;
+  sentAt?: string;
+  error?: string;
+}
+
+export interface DeliveryConfig {
+  vipDelayMin: number;
+  regularDelayMin: number;
+  priorityDelaySec: number;
+}
+
+export interface DeliveryTargetInput {
+  telegramId: number;
+  channelUsername: string;
+  channelTitle?: string;
+  tier: DeliveryTier;
+}

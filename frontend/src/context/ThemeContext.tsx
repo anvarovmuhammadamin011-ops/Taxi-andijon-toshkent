@@ -33,8 +33,9 @@ function syncTelegram() {
   const bg = getComputedStyle(document.documentElement).getPropertyValue("--background").trim() || "#0D1012";
   try {
     const w = window.Telegram?.WebApp;
-    w?.setHeaderColor?.(bg);
-    w?.setBackgroundColor?.(bg);
+    if (!w || !("version" in w) || parseFloat(String(w.version)) < 7) return;
+    w.setHeaderColor?.(bg);
+    w.setBackgroundColor?.(bg);
   } catch {
     /* older sdk */
   }

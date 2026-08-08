@@ -143,8 +143,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const tgId = telegram.getUser()?.id;
-    void api.config(tgId).then((res) => {
+    void api.config().then((res) => {
       if (res.ok) setConfig(res.data);
       setProfile((prev) => {
         if (prev) return { ...prev, isAdmin: res.ok ? res.data.isAdmin : prev.isAdmin };

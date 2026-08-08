@@ -1,0 +1,14 @@
+{
+  "name": "taxi-collector",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Taxi Collector — Toshkent ↔ Andijon taxi e'lonlari kollektori",
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c yellow,cyan \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "typecheck": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

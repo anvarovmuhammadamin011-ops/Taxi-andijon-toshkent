@@ -1,10 +1,28 @@
 import express from "express";
 import cors from "cors";
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
 import postsRouter from "./routes/posts";
 import channelsRouter from "./routes/channels";
 import routesRouter from "./routes/routes";
 import adminRouter from "./routes/admin";
 import configRouter from "./routes/config";
+import { startDeliveryScheduler } from "./services/delivery";
+
+function loadEnv(): void {
+  try {
+    const p = join(__dirname, "..", ".env");
+    if (existsSync(p)) {
+      for (const line of readFileSync(p, "utf8").split(/\r?\n/)) {
+        const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+        if (m && !(m[1] in process.env)) process.env[m[1]] = m[2];
+      }
+    }
+  } catch {
+    /* noop */
+  }
+}
+loadEnv();
 
 const app = express();
 
@@ -26,6 +44,7 @@ if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`🚕 Taxi Collector backend running on http://localhost:${PORT}`);
   });
+  startDeliveryScheduler();
 }
 
 export default app;

@@ -136,8 +136,8 @@ export default function Home() {
               </p>
               <p className="mt-1 text-[13px] text-text-2">{todayPosts} ta e'lon bugun</p>
             </div>
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] tile-gradient text-[34px] shadow-soft">
-              🚕
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full tile-gradient shadow-soft">
+              <img src="/logo.png" alt="Taxi Collector" className="h-full w-full object-cover" />
             </div>
           </div>
           <button

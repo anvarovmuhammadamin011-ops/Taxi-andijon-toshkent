@@ -13,6 +13,7 @@ const sections = [
   { to: "/admin/vip", label: "👑 VIP obuna", desc: "VIP obunachilar" },
   { to: "/admin/revenue", label: "💰 Daromad", desc: "VIP va to'lovlar" },
   { to: "/admin/settings", label: "⚙️ Sozlamalar", desc: "Limit, keywords, test" },
+  { to: "/admin/bot", label: "🤖 Bot & Tarqatish", desc: "Kanalga post yuborish" },
 ];
 
 export default function AdminPanel() {

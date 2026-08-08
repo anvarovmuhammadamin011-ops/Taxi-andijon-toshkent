@@ -25,6 +25,7 @@ import AdminPosts from "./pages/admin/AdminPosts";
 import AdminRevenue from "./pages/admin/AdminRevenue";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminVip from "./pages/admin/AdminVip";
+import AdminBot from "./pages/admin/AdminBot";
 import { telegram } from "./lib/telegram";
 
 function Shell() {
@@ -52,6 +53,7 @@ function Shell() {
           <Route path="/admin/vip" element={<AdminVip />} />
           <Route path="/admin/revenue" element={<AdminRevenue />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
+          <Route path="/admin/bot" element={<AdminBot />} />
           <Route path="*" element={<Home />} />
         </Routes>
       </main>
@@ -78,7 +80,7 @@ export default function App() {
     <ThemeProvider>
       <DataProvider>
         <ToastProvider>
-          <HashRouter>
+          <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             {splashMounted && (
               <div
                 className={`transition-opacity duration-500 ${

@@ -72,11 +72,6 @@ export default function Profile() {
   const [soundOn, setSoundOn] = useState(true);
 
   const vipActive = profile.isVip && daysLeft(profile.vipUntil) > 0;
-  const initials = (profile.name || "U")
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
 
   return (
     <div className="no-scrollbar h-full overflow-y-auto overscroll-contain pb-28">
@@ -84,8 +79,8 @@ export default function Profile() {
         <h1 className="text-[22px] font-bold tracking-tight text-ink">Profil</h1>
 
         <div className="glass-card mt-4 flex items-center gap-4 rounded-[22px] p-4 animate-fade-in-up">
-          <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full tile-gradient text-xl font-bold text-primary">
-            {initials || "👤"}
+          <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full tile-gradient shadow-soft">
+            <img src="/logo.png" alt="Taxi Collector" className="h-full w-full object-cover" />
             {vipActive && (
               <span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-primary shadow-glow">
                 <CrownIcon className="h-3.5 w-3.5 text-black" />

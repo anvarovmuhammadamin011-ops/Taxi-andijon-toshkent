@@ -1,4 +1,4 @@
-import { AppConfig, AppUser, Channel, DashboardStats, IncomingResult, Post, RevenueStats, RouteInfo } from "../types";
+import { AppConfig, AppUser, Channel, DashboardStats, DeliveryConfig, DeliveryTarget, DeliveryTask, IncomingResult, Post, RevenueStats, RouteInfo } from "../types";
 import { telegram } from "./telegram";
 
 async function request<T>(path: string, init?: RequestInit): Promise<{ data: T; ok: boolean }> {
@@ -14,8 +14,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<{ data: T; 
   }
 }
 
-function adminInit(method: string, body?: unknown): RequestInit {
+const DEMO_ADMIN_ID = 8197456094;
+
+function currentTelegramId(): number | undefined {
   const tgId = telegram.getUser()?.id;
+  if (tgId) return tgId;
+  if (!telegram.isInTelegram && ["localhost", "127.0.0.1"].includes(window.location.hostname)) {
+    return DEMO_ADMIN_ID;
+  }
+  return undefined;
+}
+
+function adminInit(method: string, body?: unknown): RequestInit {
+  const tgId = currentTelegramId();
   return {
     method,
     headers: {
@@ -37,8 +48,9 @@ export const api = {
   },
   channels: () => request<Channel[]>("/api/channels"),
   routes: () => request<RouteInfo[]>("/api/routes"),
-  config: (telegramId?: number) => {
-    const qs = telegramId ? `?telegram_id=${telegramId}` : "";
+  config: () => {
+    const tgId = currentTelegramId();
+    const qs = tgId ? `?telegram_id=${tgId}` : "";
     return request<AppConfig>(`/api/config${qs}`);
   },
 
@@ -61,5 +73,20 @@ export const api = {
     removeKeyword: (kw: string) => request<string[]>(`/api/admin/keywords/${encodeURIComponent(kw)}`, adminInit("DELETE")),
     setLimit: (postLimit: number) => request<{ postLimit: number }>("/api/admin/config", adminInit("PATCH", { postLimit })),
     simulate: () => request<IncomingResult>("/api/admin/simulate", adminInit("POST")),
+    deliveryTargets: () => request<DeliveryTarget[]>("/api/admin/delivery/targets", adminInit("GET")),
+    addDeliveryTarget: (body: { telegramId: number; channelUsername: string; channelTitle?: string; tier: string }) =>
+      request<DeliveryTarget>("/api/admin/delivery/targets", adminInit("POST", body)),
+    updateDeliveryTarget: (id: string, body: Partial<DeliveryTarget>) =>
+      request<DeliveryTarget>(`/api/admin/delivery/targets/${id}`, adminInit("PATCH", body)),
+    deleteDeliveryTarget: (id: string) =>
+      request<{ ok: boolean }>(`/api/admin/delivery/targets/${id}`, adminInit("DELETE")),
+    testDeliveryTarget: (id: string) =>
+      request<{ ok: boolean; error?: string }>(`/api/admin/delivery/targets/${id}/test`, adminInit("POST")),
+    deliveryTasks: () => request<DeliveryTask[]>("/api/admin/delivery/tasks", adminInit("GET")),
+    sendTaskNow: (id: string) => request<DeliveryTask>(`/api/admin/delivery/tasks/${id}/send`, adminInit("PATCH")),
+    clearFinishedTasks: () => request<{ ok: boolean }>("/api/admin/delivery/tasks/finished", adminInit("DELETE")),
+    deliveryConfig: () => request<DeliveryConfig>("/api/admin/delivery/config", adminInit("GET")),
+    setDeliveryConfig: (body: Partial<DeliveryConfig>) =>
+      request<DeliveryConfig>("/api/admin/delivery/config", adminInit("PATCH", body)),
   },
 };
