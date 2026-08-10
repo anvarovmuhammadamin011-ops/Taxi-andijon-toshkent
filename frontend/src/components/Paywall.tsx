@@ -41,7 +41,7 @@ export default function Paywall({ message }: { message: string }) {
           <p className="text-[13px] font-bold text-ink">To'lov uchun:</p>
           <p className="mt-1 text-[13px] text-text-2">
             Administrator bilan bog'laning —{" "}
-            <span className="font-semibold text-ink">@ilyosakataxibot</span>
+            <span className="font-semibold text-ink">@anvarovmuhammadamin</span>
           </p>
         </div>
       </div>
