@@ -1,5 +1,7 @@
 import { store } from "./store";
 import type { Channel } from "../types";
+import { classifyWithAI } from "./aiClassify";
+import { pushNotifyPhone } from "./notify";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 const MAX_ID = 2_097_152;
@@ -133,12 +135,15 @@ async function addIfText(ch: Channel, username: string, id: number): Promise<boo
   const r = await embedMessage(username, id);
   if (r.flood) await new Promise((res) => setTimeout(res, 1500));
   if (r.found && r.text) {
+    const kind = await classifyWithAI(r.text);
+    if (kind !== "passenger") return false;
     const res = store.addMonitoredPost({
       channel: ch,
       text: r.text,
       messageId: id,
       postedAt: r.postedAt ?? new Date().toISOString(),
     });
+    if (res && res.status === "new" && res.post) pushNotifyPhone(res.post);
     return Boolean(res && res.status === "new");
   }
   return false;
@@ -180,13 +185,17 @@ async function pollChannel(ch: Channel, username: string): Promise<number> {
     }
     misses = 0;
     if (r.text) {
-      const res = store.addMonitoredPost({
-        channel: ch,
-        text: r.text,
-        messageId: id,
-        postedAt: r.postedAt ?? new Date().toISOString(),
-      });
-      if (res && res.status === "new") added++;
+      const kind = await classifyWithAI(r.text);
+      if (kind === "passenger") {
+        const res = store.addMonitoredPost({
+          channel: ch,
+          text: r.text,
+          messageId: id,
+          postedAt: r.postedAt ?? new Date().toISOString(),
+        });
+        if (res && res.status === "new" && res.post) pushNotifyPhone(res.post);
+        if (res && res.status === "new") added++;
+      }
     }
     store.setMonitorLastId(username, id);
     id++;

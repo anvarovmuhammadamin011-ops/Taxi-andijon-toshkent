@@ -1,0 +1,13 @@
+name: Poll taxi channels
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger backend poll
+        run: curl -sS -m 90 "https://taxi-andijon-toshkent.vercel.app/api/cron/poll" || true
