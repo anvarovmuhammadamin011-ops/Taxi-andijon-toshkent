@@ -13,10 +13,10 @@ export default function Channels() {
     <div className="no-scrollbar h-full overflow-y-auto overscroll-contain pb-24">
       <div className="px-4 pt-4 safe-top">
         <h1 className="text-2xl font-extrabold tracking-wide">
-          Man<span className="text-primary">balar</span>
+          Ka<span className="text-primary">nallar</span>
         </h1>
         <p className="mt-0.5 text-[13px] text-text-2">
-          E'lonlar qaysi kanallardan yig'iladi
+          Qaysi kanal ulangan bo'lsa, e'lonlari shu yerda ko'rinadi
         </p>
 
         <div className="mt-4">

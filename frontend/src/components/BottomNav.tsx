@@ -1,9 +1,9 @@
 import { NavLink } from "react-router-dom";
-import { HomeIcon, RouteIcon, StarIcon, UserIcon } from "./Icons";
+import { HomeIcon, ChannelIcon, StarIcon, UserIcon } from "./Icons";
 
 const tabs = [
   { to: "/", label: "Bosh sahifa", Icon: HomeIcon, end: true },
-  { to: "/routes", label: "Yo'nalishlar", Icon: RouteIcon, end: false },
+  { to: "/channels", label: "Kanallar", Icon: ChannelIcon, end: false },
   { to: "/favorites", label: "Saqlanganlar", Icon: StarIcon, end: false },
   { to: "/profile", label: "Profil", Icon: UserIcon, end: false },
 ];

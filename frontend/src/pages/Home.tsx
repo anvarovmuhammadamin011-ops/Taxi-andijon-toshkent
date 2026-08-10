@@ -15,7 +15,7 @@ const routeFilters: RouteFilter[] = [
 ];
 
 export default function Home() {
-  const { posts, channels, routes, loading, refresh, newPostsCount, showNewPosts } = useData();
+  const { posts, channels, loading, refresh, newPostsCount, showNewPosts } = useData();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<FilterId>("all");
   const [channelFilter, setChannelFilter] = useState<string>("all");
@@ -123,16 +123,16 @@ export default function Home() {
           <span className="text-[15px] text-text-2">Qidirish...</span>
         </button>
 
-        <section className="glass-card relative mt-4 overflow-hidden rounded-[24px] p-5 animate-fade-in-up">
+          <section className="glass-card relative mt-4 overflow-hidden rounded-[24px] p-5 animate-fade-in-up">
           <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-primary/25 blur-2xl" />
           <div className="pointer-events-none absolute -bottom-12 -left-8 h-28 w-28 rounded-full bg-primary/10 blur-2xl" />
           <div className="relative flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[11px] font-bold uppercase tracking-widest text-primary">
-                Eng faol yo'nalish
+                Ulangan kanallar
               </p>
               <p className="mt-1.5 text-[20px] font-extrabold leading-tight tracking-tight text-ink">
-                Toshkent ↔ Andijon
+                {channels.length} ta kanal
               </p>
               <p className="mt-1 text-[13px] text-text-2">{todayPosts} ta e'lon bugun</p>
             </div>
@@ -143,11 +143,11 @@ export default function Home() {
           <button
             onClick={() => {
               telegram.haptic("light");
-              navigate("/routes");
+              navigate("/channels");
             }}
             className="btn-primary press relative mt-4 flex w-full items-center justify-center gap-1.5 rounded-[16px] px-4 py-3 text-[14px] font-bold"
           >
-            Yo'nalishlarni ko'rish
+            Kanallarni ko'rish
             <ChevronRightIcon className="h-4 w-4" />
           </button>
         </section>
@@ -155,8 +155,8 @@ export default function Home() {
         <div className="mt-3 grid grid-cols-3 gap-2">
           {[
             { value: todayPosts, label: "Bugungi e'lon" },
+            { value: posts.length, label: "Jami e'lon" },
             { value: activeChannels, label: "Faol kanal" },
-            { value: routes.length, label: "Yo'nalish" },
           ].map((s, i) => (
             <div
               key={s.label}
