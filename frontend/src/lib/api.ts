@@ -43,16 +43,6 @@ export const api = {
     if (token) headers["x-admin-token"] = token;
     const r = await request<AppConfig>("/api/config", { headers });
     if (r.ok && r.data) return r;
-    let paywall = { enabled: false, message: "" };
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 4000);
-      const pr = await fetch("/paywall.json", { signal: controller.signal });
-      clearTimeout(timer);
-      if (pr.ok) paywall = (await pr.json()) as { enabled: boolean; message: string };
-    } catch {
-      /* noop */
-    }
     return {
       ok: false,
       data: {
@@ -61,7 +51,6 @@ export const api = {
         keywords: [],
         plans: [],
         isAdmin: false,
-        paywall,
       },
     };
   },
@@ -74,13 +63,6 @@ export const api = {
         body: JSON.stringify({ password }),
       }),
     logout: () => request<{ ok: boolean }>("/api/admin/logout", adminInit("POST")),
-    paywall: () =>
-      request<{ enabled: boolean; message: string }>("/api/admin/paywall", adminInit("GET")),
-    setPaywall: (body: { enabled?: boolean; message?: string }) =>
-      request<{ enabled: boolean; message: string }>(
-        "/api/admin/paywall",
-        adminInit("PATCH", body)
-      ),
     dashboard: () => request<DashboardStats>("/api/admin/dashboard", adminInit("GET")),
     channels: () => request<Channel[]>("/api/admin/channels", adminInit("GET")),
     addChannel: (title: string, url: string) =>

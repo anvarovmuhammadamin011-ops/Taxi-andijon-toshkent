@@ -99,7 +99,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     keywords: [],
     plans: [],
     isAdmin: false,
-    paywall: { enabled: false, message: "" },
   });
 
   const persistFavorites = useCallback((set: Set<string>) => {

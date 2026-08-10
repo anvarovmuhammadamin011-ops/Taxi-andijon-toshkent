@@ -26,9 +26,6 @@ import { loadDb, saveDb } from "./persistence";
 
 export const DEFAULT_POST_LIMIT = 100;
 
-export const DEFAULT_PAYWALL_MESSAGE =
-  "Hurmatli foydalanuvchi!\n\nXizmatdan foydalanish uchun avval to'lovni amalga oshiring.";
-
 const DEFAULT_DELIVERY_CONFIG: DeliveryConfig = {
   vipDelayMin: 5,
   regularDelayMin: 8,
@@ -62,7 +59,6 @@ interface DbState {
   deliveryQueue: DeliveryTask[];
   deliveryConfig: DeliveryConfig;
   monitorLastId: Record<string, number>;
-  paywall: { enabled: boolean; message: string };
 }
 
 class Store {
@@ -78,10 +74,6 @@ class Store {
   private deliveryQueue: DeliveryTask[];
   private deliveryConfig: DeliveryConfig;
   private monitorLastId: Record<string, number> = {};
-  private paywall: { enabled: boolean; message: string } = {
-    enabled: false,
-    message: DEFAULT_PAYWALL_MESSAGE,
-  };
 
   constructor() {
     const db = loadDb<DbState>();
@@ -98,7 +90,6 @@ class Store {
       this.deliveryQueue = db.deliveryQueue ?? [];
       this.deliveryConfig = db.deliveryConfig ?? { ...DEFAULT_DELIVERY_CONFIG };
       this.monitorLastId = db.monitorLastId ?? {};
-      this.paywall = db.paywall ?? { enabled: false, message: DEFAULT_PAYWALL_MESSAGE };
     } else {
       this.posts = [...demoPosts];
       this.channels = [...demoChannels];
@@ -130,7 +121,6 @@ class Store {
       deliveryQueue: this.deliveryQueue,
       deliveryConfig: this.deliveryConfig,
       monitorLastId: this.monitorLastId,
-      paywall: this.paywall,
     });
   }
 
@@ -418,21 +408,7 @@ class Store {
       keywords: this.keywords,
       plans: demoPlans,
       isAdmin,
-      paywall: { ...this.paywall },
     };
-  }
-
-  getPaywall(): { enabled: boolean; message: string } {
-    return { ...this.paywall };
-  }
-
-  setPaywall(patch: { enabled?: boolean; message?: string }): { enabled: boolean; message: string } {
-    if (patch.enabled !== undefined) this.paywall.enabled = Boolean(patch.enabled);
-    if (patch.message !== undefined && patch.message.trim()) {
-      this.paywall.message = patch.message.trim();
-    }
-    this.save();
-    return { ...this.paywall };
   }
 
   addKeyword(kw: string): void {
