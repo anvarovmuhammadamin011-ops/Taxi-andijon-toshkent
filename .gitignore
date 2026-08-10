@@ -6,3 +6,6 @@ dist/
 bot/
 backend/.env
 backend/data/
+
+.vercel
+.env*

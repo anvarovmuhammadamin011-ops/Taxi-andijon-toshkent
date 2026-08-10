@@ -16,6 +16,7 @@ import {
   demoPlans,
   rawSamples,
 } from "../data/demo";
+import { SEED_CHANNELS, SEED_MONITOR_LAST_ID, SEED_POSTS } from "../data/seeds";
 import { parsePost } from "./parser";
 import { findDuplicates } from "./duplicate";
 import { loadDb, saveDb } from "./persistence";
@@ -35,13 +36,6 @@ const EMPTY_REVENUE: RevenueStats = {
   vipUsers: 0,
   payments: 0,
   history: [],
-};
-
-const SEED_MONITOR_LAST_ID: Record<string, number> = {
-  taxsislar: 254796,
-  Chinabod_Tashkent_Baliqchi: 169966,
-  baliqchi2: 328147,
-  Oltinkol_Toshkent: 109036,
 };
 
 function defaultTargets(): DeliveryTarget[] {
@@ -103,14 +97,14 @@ class Store {
       this.deliveryConfig = db.deliveryConfig ?? { ...DEFAULT_DELIVERY_CONFIG };
       this.monitorLastId = db.monitorLastId ?? { ...SEED_MONITOR_LAST_ID };
     } else {
-      this.posts = [];
-      this.channels = [];
+      this.posts = [...SEED_POSTS];
+      this.channels = [...SEED_CHANNELS];
       this.users = [];
       this.revenue = { ...EMPTY_REVENUE, history: [] };
       this.keywords = [...demoKeywords];
       this.postLimit = DEFAULT_POST_LIMIT;
-      this.seq = 100;
-      this.dseq = 100;
+      this.seq = 2000;
+      this.dseq = 200;
       this.deliveryTargets = defaultTargets();
       this.deliveryQueue = [];
       this.deliveryConfig = { ...DEFAULT_DELIVERY_CONFIG };

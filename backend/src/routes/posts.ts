@@ -1,13 +1,15 @@
 import { Router } from "express";
 import { store } from "../services/store";
+import { pollIfStale } from "../services/monitor";
 
 const router = Router();
 
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   const q = req.query.q as string | undefined;
   const route = req.query.route as string | undefined;
   const channel = req.query.channel as string | undefined;
   const since = req.query.since as string | undefined;
+  await pollIfStale(30_000);
   res.json(store.getPosts(q, route, channel, since));
 });
 

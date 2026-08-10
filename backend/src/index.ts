@@ -8,7 +8,7 @@ import routesRouter from "./routes/routes";
 import adminRouter from "./routes/admin";
 import configRouter from "./routes/config";
 import { startDeliveryScheduler } from "./services/delivery";
-import { startMonitor, pollOnce } from "./services/monitor";
+import { startMonitor, pollIfStale } from "./services/monitor";
 
 function loadEnv(): void {
   try {
@@ -40,9 +40,9 @@ app.use("/api/routes", routesRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/config", configRouter);
 
-app.post("/api/cron/poll", async (_req, res) => {
+app.get("/api/cron/poll", async (_req, res) => {
   try {
-    const added = await pollOnce();
+    const added = await pollIfStale(60_000);
     res.json({ ok: true, added });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
