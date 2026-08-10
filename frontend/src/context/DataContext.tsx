@@ -216,8 +216,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const visiblePosts = useMemo(() => {
     if (postKindFilter === "all") return posts;
-    if (postKindFilter === "passenger") return posts.filter((p) => classifyPostKind(p.text) !== "driver");
-    return posts.filter((p) => classifyPostKind(p.text) !== "passenger");
+    if (postKindFilter === "passenger") return posts.filter((p) => classifyPostKind(p.text) === "passenger");
+    return posts.filter((p) => classifyPostKind(p.text) === "driver");
   }, [posts, postKindFilter]);
 
   const value = useMemo<DataState>(
