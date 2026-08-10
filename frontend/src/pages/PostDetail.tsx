@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
-import { dateLabel, displayPhone, normalizePhone, routeKey } from "../lib/format";
+import { dateLabel, displayPhone, formatPhonesInText, normalizePhone, routeKey } from "../lib/format";
 import { telegram } from "../lib/telegram";
 import { HeartIcon, IdIcon, PhoneIcon, PinIcon, UserIcon } from "../components/Icons";
 import EmptyState from "../components/EmptyState";
@@ -87,7 +87,7 @@ export default function PostDetail() {
             )}
           </div>
 
-          <p className="mt-4 text-[17px] font-medium leading-relaxed text-ink">{post.text}</p>
+          <p className="mt-4 text-[17px] font-medium leading-relaxed text-ink">{formatPhonesInText(post.text)}</p>
 
           <div className="mt-4 space-y-2.5">
             {post.driverName && (

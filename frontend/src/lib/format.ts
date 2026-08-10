@@ -48,7 +48,17 @@ export function displayPhone(raw?: string): string {
   const n = normalizePhone(raw);
   if (!n) return "";
   const d = n.replace(/\D/g, "").slice(-12);
-  return `+998 ${d.slice(3, 6)} ${d.slice(6, 9)}-${d.slice(9, 11)}-${d.slice(11, 13)}`;
+  return `+998 ${d.slice(3, 5)} ${d.slice(5, 8)}-${d.slice(8, 10)}-${d.slice(10, 12)}`;
+}
+
+const PHONE_CANDIDATE_RE = /(?<!\d)(?:\+?998[\s\-]?)?\d(?:[\s\-]?\d){8,11}(?!\d)/g;
+
+export function formatPhonesInText(text: string): string {
+  return text.replace(PHONE_CANDIDATE_RE, (m) => {
+    const cleaned = m.replace(/\D/g, "");
+    if (!/^(?:\d{9}|8\d{9}|998\d{9})$/.test(cleaned)) return m;
+    return displayPhone(cleaned);
+  });
 }
 
 export function routeKey(from: string, to: string): string {

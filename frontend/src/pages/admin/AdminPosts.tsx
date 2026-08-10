@@ -7,7 +7,7 @@ import EmptyState from "../../components/EmptyState";
 import { FeedSkeleton } from "../../components/Skeletons";
 import { telegram } from "../../lib/telegram";
 import { TrashIcon } from "../../components/Icons";
-import { timeAgo } from "../../lib/format";
+import { formatPhonesInText, timeAgo } from "../../lib/format";
 
 export default function AdminPosts() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -61,7 +61,7 @@ export default function AdminPosts() {
                   <span>· {p.from} → {p.to}</span>
                   <span className="ml-auto">{timeAgo(p.postedAt)}</span>
                 </div>
-                <p className="mt-2 text-[15px] leading-snug text-ink">{p.text}</p>
+                <p className="mt-2 text-[15px] leading-snug text-ink">{formatPhonesInText(p.text)}</p>
                 <div className="mt-3 flex gap-2">
                   <button
                     onClick={() => remove(p)}

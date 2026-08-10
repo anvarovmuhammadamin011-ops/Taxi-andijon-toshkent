@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Post } from "../types";
-import { displayPhone, isNewPost, normalizePhone, routeKey, timeAgo } from "../lib/format";
+import { displayPhone, formatPhonesInText, isNewPost, normalizePhone, routeKey, timeAgo } from "../lib/format";
 import { telegram } from "../lib/telegram";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
@@ -60,7 +60,7 @@ export default function PostCard({ post, index = 0 }: Props) {
       </div>
 
       <p className="mt-3 text-[16px] font-medium leading-relaxed text-ink">
-        {post.text}
+        {formatPhonesInText(post.text)}
       </p>
 
       <div className="mt-3 flex items-center gap-2">
