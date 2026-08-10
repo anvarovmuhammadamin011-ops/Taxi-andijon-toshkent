@@ -8,7 +8,7 @@ import EmptyState from "../components/EmptyState";
 
 export default function ChannelFeed() {
   const { id = "" } = useParams<{ id: string }>();
-  const { posts, channels, loading } = useData();
+  const { visiblePosts, channels, loading } = useData();
   const navigate = useNavigate();
   const channel = channels.find((c) => c.id === id);
 
@@ -25,10 +25,10 @@ export default function ChannelFeed() {
 
   const list = useMemo(
     () =>
-      posts
+      visiblePosts
         .filter((p) => p.channelId === id)
         .sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()),
-    [posts, id]
+    [visiblePosts, id]
   );
 
   return (

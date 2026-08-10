@@ -10,7 +10,7 @@ import { telegram } from "../lib/telegram";
 const suggestions = ["Toshkent", "Andijon", "Haqqulobod", "Taxi", "992028222", "901234567"];
 
 export default function Search() {
-  const { posts, loading } = useData();
+  const { visiblePosts, loading } = useData();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -28,12 +28,12 @@ export default function Search() {
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return posts.filter((p) =>
+    return visiblePosts.filter((p) =>
       [p.text, p.from, p.to, p.phone, p.channelTitle, p.driverName]
         .filter(Boolean)
         .some((v) => v!.toLowerCase().includes(q))
     );
-  }, [posts, query]);
+  }, [visiblePosts, query]);
 
   return (
     <div className="no-scrollbar h-full overflow-y-auto overscroll-contain pb-28">

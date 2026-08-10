@@ -4,14 +4,14 @@ import FeedList from "../components/FeedList";
 import EmptyState from "../components/EmptyState";
 
 export default function Favorites() {
-  const { posts, favorites } = useData();
+  const { visiblePosts, favorites } = useData();
 
   const saved = useMemo(
     () =>
-      posts
+      visiblePosts
         .filter((p) => favorites.has(p.id))
         .sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()),
-    [posts, favorites]
+    [visiblePosts, favorites]
   );
 
   return (

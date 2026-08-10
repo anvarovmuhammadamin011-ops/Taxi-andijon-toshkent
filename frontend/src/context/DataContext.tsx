@@ -10,7 +10,10 @@ import {
 } from "react";
 import { AppConfig, Channel, IncomingResult, Post, RouteInfo, UserProfile } from "../types";
 import { api } from "../lib/api";
+import { classifyPostKind } from "../lib/postKind";
 import { telegram } from "../lib/telegram";
+
+export type PostKindFilter = "all" | "passenger" | "driver";
 
 interface DataState {
   posts: Post[];
@@ -29,12 +32,25 @@ interface DataState {
   showNewPosts: () => void;
   simulateNewPost: () => Promise<IncomingResult | null>;
   getPost: (id: string) => Post | undefined;
+  visiblePosts: Post[];
+  postKindFilter: PostKindFilter;
+  setPostKindFilter: (f: PostKindFilter) => void;
 }
 
 const DataContext = createContext<DataState | null>(null);
 
 const FAV_KEY = "taxi_collector_favorites";
 const PROFILE_KEY = "taxi_collector_profile";
+const KIND_FILTER_KEY = "taxi_collector_kind_filter";
+
+function loadKindFilter(): PostKindFilter {
+  try {
+    const v = localStorage.getItem(KIND_FILTER_KEY);
+    return v === "all" || v === "driver" || v === "passenger" ? v : "passenger";
+  } catch {
+    return "passenger";
+  }
+}
 
 function loadFavorites(): Set<string> {
   try {
@@ -91,6 +107,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [favorites, setFavorites] = useState<Set<string>>(loadFavorites);
   const [newPosts, setNewPosts] = useState<Post[]>([]);
   const lastSeenRef = useRef<string>("");
+  const [postKindFilter, setPostKindFilterState] = useState<PostKindFilter>(loadKindFilter);
   const [profile, setProfile] = useState<UserProfile>(() => loadProfile() ?? defaultProfile(false));
   const [config, setConfig] = useState<AppConfig>({
     cities: ["Toshkent", "Andijon", "Haqqulobod"],
@@ -188,6 +205,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const getPost = useCallback((id: string) => posts.find((p) => p.id === id), [posts]);
 
+  const setPostKindFilter = useCallback((f: PostKindFilter) => {
+    setPostKindFilterState(f);
+    try {
+      localStorage.setItem(KIND_FILTER_KEY, f);
+    } catch {
+      /* noop */
+    }
+  }, []);
+
+  const visiblePosts = useMemo(() => {
+    if (postKindFilter === "all") return posts;
+    if (postKindFilter === "passenger") return posts.filter((p) => classifyPostKind(p.text) !== "driver");
+    return posts.filter((p) => classifyPostKind(p.text) !== "passenger");
+  }, [posts, postKindFilter]);
+
   const value = useMemo<DataState>(
     () => ({
       posts,
@@ -206,6 +238,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       showNewPosts,
       simulateNewPost,
       getPost,
+      visiblePosts,
+      postKindFilter,
+      setPostKindFilter,
     }),
     [
       posts,
@@ -223,6 +258,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       showNewPosts,
       simulateNewPost,
       getPost,
+      visiblePosts,
+      postKindFilter,
+      setPostKindFilter,
     ]
   );
 

@@ -9,7 +9,7 @@ import EmptyState from "../components/EmptyState";
 
 export default function RouteFeed() {
   const { from = "", to = "" } = useParams<{ from: string; to: string }>();
-  const { posts, loading } = useData();
+  const { visiblePosts, loading } = useData();
   const navigate = useNavigate();
 
   const goBack = () => {
@@ -25,10 +25,10 @@ export default function RouteFeed() {
 
   const list = useMemo(
     () =>
-      posts
+      visiblePosts
         .filter((p) => routeKey(p.from, p.to) === routeKey(from, to))
         .sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()),
-    [posts, from, to]
+    [visiblePosts, from, to]
   );
 
   return (
