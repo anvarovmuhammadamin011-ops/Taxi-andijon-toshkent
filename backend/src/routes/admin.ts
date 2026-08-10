@@ -23,6 +23,19 @@ router.post("/logout", requireAdmin, (_req, res) => {
   res.json({ ok: true });
 });
 
+router.get("/paywall", requireAdmin, (_req, res) => {
+  res.json(store.getPaywall());
+});
+
+router.patch("/paywall", requireAdmin, (req, res) => {
+  res.json(
+    store.setPaywall({
+      enabled: req.body?.enabled,
+      message: req.body?.message,
+    })
+  );
+});
+
 router.use(requireAdmin);
 
 router.get("/dashboard", (_req, res) => {

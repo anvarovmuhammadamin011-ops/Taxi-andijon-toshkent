@@ -12,6 +12,8 @@ export default function AdminSettings() {
   const [limit, setLimit] = useState(config.postLimit);
   const [simulating, setSimulating] = useState(false);
   const [simResult, setSimResult] = useState<string>("");
+  const [paywallOn, setPaywallOn] = useState(config.paywall?.enabled ?? false);
+  const [paywallBusy, setPaywallBusy] = useState(false);
 
   const load = () => api.admin.keywords().then((r) => r.ok && setKeywords(r.data));
 
@@ -55,6 +57,21 @@ export default function AdminSettings() {
       void refresh();
     } else {
       setSimResult("⚠️ Backend ulanmagan — demo rejim");
+    }
+  };
+
+  const togglePaywall = async (enabled: boolean) => {
+    if (paywallBusy) return;
+    setPaywallBusy(true);
+    const res = await api.admin.setPaywall({ enabled });
+    setPaywallBusy(false);
+    if (res.ok && res.data) {
+      setPaywallOn(res.data.enabled);
+      telegram.notify(res.data.enabled ? "warning" : "success");
+      telegram.haptic("medium");
+      void refresh();
+    } else {
+      telegram.notify("error");
     }
   };
 
@@ -113,6 +130,27 @@ export default function AdminSettings() {
                 Qo'shish
               </button>
             </div>
+          </AdminRow>
+
+          <AdminRow
+            title={paywallOn ? "🔒 Paywall: YOQIQ" : "🔓 Paywall: o'chiq"}
+            subtitle={
+              paywallOn
+                ? "Ilova to'liq yopiq — hamma \"Pulini to'lang\" ekranini ko'radi"
+                : "Yoqilganda butun ilova bloklanadi, faqat admin o'chira oladi"
+            }
+          >
+            <button
+              onClick={() => togglePaywall(!paywallOn)}
+              disabled={paywallBusy}
+              className={`press w-full rounded-xl py-3 text-sm font-bold disabled:opacity-50 ${
+                paywallOn
+                  ? "bg-card-hi border border-line text-ink"
+                  : "bg-red-500/10 border border-red-500/30 text-red-500"
+              }`}
+            >
+              {paywallOn ? "Paywallni o'chirish" : "Paywallni yoqish (ilovani yopish)"}
+            </button>
           </AdminRow>
 
           <AdminRow title="⚡ Test: yangi post simulyatsiyasi" subtitle="Telegram kanalidan kelgandek yangi post yaratadi (parser + duplicate tekshiruvi)">

@@ -81,6 +81,7 @@ export interface AppConfig {
   keywords: string[];
   plans: VipPlan[];
   isAdmin: boolean;
+  paywall: { enabled: boolean; message: string };
 }
 
 export interface DashboardStats {

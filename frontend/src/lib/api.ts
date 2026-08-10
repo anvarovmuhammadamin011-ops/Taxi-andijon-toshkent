@@ -1,5 +1,5 @@
 import { AppConfig, AppUser, Channel, DashboardStats, DeliveryConfig, DeliveryTarget, DeliveryTask, IncomingResult, Post, RevenueStats, RouteInfo } from "../types";
-import { telegram } from "./telegram";
+import { getAdminToken } from "./adminAuth";
 
 async function request<T>(path: string, init?: RequestInit): Promise<{ data: T; ok: boolean }> {
   try {
@@ -14,34 +14,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<{ data: T; 
   }
 }
 
-const DEMO_ADMIN_ID = 8197456094;
-const CLIENT_ADMIN_IDS = [8197456094];
-const CLIENT_ADMIN_USERNAMES = ["anvarovmuhammadamin"];
-
-function currentTelegram(): { id?: number; username?: string } | undefined {
-  const user = telegram.getUser();
-  if (user) return { id: user.id, username: user.username };
-  if (!telegram.isInTelegram && ["localhost", "127.0.0.1"].includes(window.location.hostname)) {
-    return { id: DEMO_ADMIN_ID };
-  }
-  return undefined;
-}
-
-function isClientAdmin(me?: { id?: number; username?: string }): boolean {
-  if (!me) return false;
-  if (me.id && CLIENT_ADMIN_IDS.includes(me.id)) return true;
-  if (me.username && CLIENT_ADMIN_USERNAMES.includes(me.username.toLowerCase())) return true;
-  return false;
-}
-
 function adminInit(method: string, body?: unknown): RequestInit {
-  const me = currentTelegram();
+  const token = getAdminToken();
   return {
     method,
     headers: {
       "Content-Type": "application/json",
-      ...(me?.id ? { "x-telegram-id": String(me.id) } : {}),
-      ...(me?.username ? { "x-telegram-username": me.username } : {}),
+      ...(token ? { "x-admin-token": token } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   };
@@ -59,20 +38,49 @@ export const api = {
   channels: () => request<Channel[]>("/api/channels"),
   routes: () => request<RouteInfo[]>("/api/routes"),
   config: async () => {
-    const me = currentTelegram();
-    const params = new URLSearchParams();
-    if (me?.id) params.set("telegram_id", String(me.id));
-    if (me?.username) params.set("telegram_username", me.username);
-    const qs = params.toString();
-    const r = await request<AppConfig>(`/api/config${qs ? `?${qs}` : ""}`);
+    const token = getAdminToken();
+    const headers: Record<string, string> = {};
+    if (token) headers["x-admin-token"] = token;
+    const r = await request<AppConfig>("/api/config", { headers });
     if (r.ok && r.data) return r;
+    let paywall = { enabled: false, message: "" };
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 4000);
+      const pr = await fetch("/paywall.json", { signal: controller.signal });
+      clearTimeout(timer);
+      if (pr.ok) paywall = (await pr.json()) as { enabled: boolean; message: string };
+    } catch {
+      /* noop */
+    }
     return {
       ok: false,
-      data: { cities: [], postLimit: 100, keywords: [], plans: [], isAdmin: isClientAdmin(me) },
+      data: {
+        cities: [],
+        postLimit: 100,
+        keywords: [],
+        plans: [],
+        isAdmin: false,
+        paywall,
+      },
     };
   },
 
   admin: {
+    login: (password: string) =>
+      request<{ token: string }>("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      }),
+    logout: () => request<{ ok: boolean }>("/api/admin/logout", adminInit("POST")),
+    paywall: () =>
+      request<{ enabled: boolean; message: string }>("/api/admin/paywall", adminInit("GET")),
+    setPaywall: (body: { enabled?: boolean; message?: string }) =>
+      request<{ enabled: boolean; message: string }>(
+        "/api/admin/paywall",
+        adminInit("PATCH", body)
+      ),
     dashboard: () => request<DashboardStats>("/api/admin/dashboard", adminInit("GET")),
     channels: () => request<Channel[]>("/api/admin/channels", adminInit("GET")),
     addChannel: (title: string, url: string) =>

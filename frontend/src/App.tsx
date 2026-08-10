@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { HashRouter, Route, Routes } from "react-router-dom";
-import { DataProvider } from "./context/DataContext";
+import { DataProvider, useData } from "./context/DataContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ToastProvider } from "./context/ToastContext";
 import Splash from "./components/Splash";
 import BottomNav from "./components/BottomNav";
+import Paywall from "./components/Paywall";
 import Home from "./pages/Home";
 import RoutesPage from "./pages/Routes";
 import Channels from "./pages/Channels";
@@ -29,6 +30,10 @@ import AdminBot from "./pages/admin/AdminBot";
 import { telegram } from "./lib/telegram";
 
 function Shell() {
+  const { config } = useData();
+  if (config.paywall?.enabled) {
+    return <Paywall message={config.paywall.message} />;
+  }
   return (
     <div className="app-glow mx-auto flex h-full max-w-md flex-col bg-bg">
       <main className="relative flex-1 overflow-hidden">
