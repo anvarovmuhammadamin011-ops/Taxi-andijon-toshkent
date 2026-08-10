@@ -145,7 +145,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void api.config().then((res) => {
-      if (res.ok && res.data) setConfig(res.data);
+      if (res.data) setConfig(res.data);
       const isAdmin = res.data?.isAdmin ?? false;
       setProfile((prev) => {
         if (prev) return { ...prev, isAdmin };
