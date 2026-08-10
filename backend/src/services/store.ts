@@ -25,15 +25,6 @@ import { findDuplicates } from "./duplicate";
 import { loadDb, saveDb } from "./persistence";
 
 export const DEFAULT_POST_LIMIT = 100;
-export const DEFAULT_ADMIN_IDS = (process.env.ADMIN_IDS ?? "8197456094")
-  .split(",")
-  .map((s) => Number(s.trim()))
-  .filter((n) => !Number.isNaN(n));
-
-export const DEFAULT_ADMIN_USERNAMES = (process.env.ADMIN_USERNAMES ?? "anvarovmuhammadamin")
-  .split(",")
-  .map((s) => s.trim().replace(/^@/, "").toLowerCase())
-  .filter(Boolean);
 
 const DEFAULT_DELIVERY_CONFIG: DeliveryConfig = {
   vipDelayMin: 5,
@@ -67,6 +58,7 @@ interface DbState {
   deliveryTargets: DeliveryTarget[];
   deliveryQueue: DeliveryTask[];
   deliveryConfig: DeliveryConfig;
+  monitorLastId: Record<string, number>;
 }
 
 class Store {
@@ -76,13 +68,12 @@ class Store {
   private revenue: RevenueStats;
   private keywords: string[];
   private postLimit: number;
-  private adminIds: number[] = [...DEFAULT_ADMIN_IDS];
-  private adminUsernames: string[] = [...DEFAULT_ADMIN_USERNAMES];
   private seq: number;
   private dseq: number;
   private deliveryTargets: DeliveryTarget[];
   private deliveryQueue: DeliveryTask[];
   private deliveryConfig: DeliveryConfig;
+  private monitorLastId: Record<string, number> = {};
 
   constructor() {
     const db = loadDb<DbState>();
@@ -98,6 +89,7 @@ class Store {
       this.deliveryTargets = db.deliveryTargets ?? defaultTargets();
       this.deliveryQueue = db.deliveryQueue ?? [];
       this.deliveryConfig = db.deliveryConfig ?? { ...DEFAULT_DELIVERY_CONFIG };
+      this.monitorLastId = db.monitorLastId ?? {};
     } else {
       this.posts = [...demoPosts];
       this.channels = [...demoChannels];
@@ -110,6 +102,7 @@ class Store {
       this.deliveryTargets = defaultTargets();
       this.deliveryQueue = [];
       this.deliveryConfig = { ...DEFAULT_DELIVERY_CONFIG };
+      this.monitorLastId = {};
     }
     this.save();
   }
@@ -127,14 +120,8 @@ class Store {
       deliveryTargets: this.deliveryTargets,
       deliveryQueue: this.deliveryQueue,
       deliveryConfig: this.deliveryConfig,
+      monitorLastId: this.monitorLastId,
     });
-  }
-
-  isAdmin(telegramId?: number | string, telegramUsername?: string): boolean {
-    const n = Number(telegramId);
-    if (this.adminIds.includes(n)) return true;
-    const u = String(telegramUsername ?? "").replace(/^@/, "").toLowerCase();
-    return u ? this.adminUsernames.includes(u) : false;
   }
 
   getPosts(query?: string, route?: string, channel?: string, since?: string): Post[] {
@@ -184,6 +171,38 @@ class Store {
     this.channels.push(channel);
     this.save();
     return channel;
+  }
+
+  ensureChannel(username: string, title: string): Channel {
+    const clean = username.replace(/^@/, "").replace(/^https:\/\/t\.me\//, "").replace(/^t\.me\//, "");
+    const url = `https://t.me/${clean}`;
+    const existing = this.channels.find((c) => c.url.toLowerCase() === url.toLowerCase());
+    if (existing) return existing;
+    const channel: Channel = {
+      id: "mc" + clean.toLowerCase().replace(/[^a-z0-9_]/g, ""),
+      title,
+      url,
+      postCount: 0,
+      isActive: true,
+      addedAt: new Date().toISOString(),
+    };
+    this.channels.push(channel);
+    this.save();
+    return channel;
+  }
+
+  hasMessage(channelId: string, messageId: number): boolean {
+    return this.posts.some((p) => p.channelId === channelId && p.messageId === messageId);
+  }
+
+  getMonitorLastId(username: string): number | undefined {
+    const v = this.monitorLastId[username];
+    return v === undefined ? undefined : v;
+  }
+
+  setMonitorLastId(username: string, id: number): void {
+    this.monitorLastId[username] = id;
+    this.save();
   }
 
   setChannelActive(id: string, isActive: boolean): Channel | undefined {
@@ -277,6 +296,46 @@ class Store {
     return this.addIncoming(raw, channel);
   }
 
+  addMonitoredPost(input: {
+    channel: Channel;
+    text: string;
+    messageId: number;
+    postedAt: string;
+  }): IncomingResult | null {
+    if (this.hasMessage(input.channel.id, input.messageId)) return null;
+    const parsed = parsePost(input.text);
+    const candidate: Post = {
+      id: `p${this.seq++}`,
+      channelId: input.channel.id,
+      channelTitle: input.channel.title,
+      channelUrl: input.channel.url,
+      text: input.text,
+      route: parsed.route,
+      from: parsed.from!,
+      to: parsed.to!,
+      phone: parsed.phone,
+      seats: parsed.people,
+      postedAt: input.postedAt,
+      messageId: input.messageId,
+      alsoIn: [],
+    };
+
+    const dups = findDuplicates(candidate, this.posts, parsed.phone);
+    if (dups.length > 0) {
+      const target = dups[0];
+      if (!target.alsoIn.some((s) => s.channelId === input.channel.id)) {
+        target.alsoIn.push({ channelId: input.channel.id, channelTitle: input.channel.title });
+      }
+      return { raw: input.text, parsed, status: "duplicate", duplicatedFrom: target };
+    }
+
+    this.posts.unshift(candidate);
+    this.enforceLimit(candidate.route);
+    this.save();
+    this.queueDeliveries(candidate);
+    return { raw: input.text, parsed, status: "new", post: candidate };
+  }
+
   private enforceLimit(route: string): void {
     const routePosts = this.posts
       .filter((p) => p.route === route)
@@ -342,13 +401,13 @@ class Store {
     };
   }
 
-  getConfig(telegramId?: number | string, telegramUsername?: string): AppConfig {
+  getConfig(isAdmin = false): AppConfig {
     return {
       cities: ["Toshkent", "Andijon", "Haqqulobod", "Namangan", "Farg'ona", "Qo'qon"],
       postLimit: this.postLimit,
       keywords: this.keywords,
       plans: demoPlans,
-      isAdmin: this.isAdmin(telegramId, telegramUsername),
+      isAdmin,
     };
   }
 

@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { store } from "../services/store";
+import { verifyToken } from "../services/auth";
 
 const router = Router();
 
 router.get("/", (req, res) => {
-  const tgId = req.query.telegram_id as string | undefined;
-  const tgUsername = req.query.telegram_username as string | undefined;
-  res.json(store.getConfig(tgId, tgUsername));
+  const isAdmin = verifyToken(req.header("x-admin-token"));
+  res.json(store.getConfig(isAdmin));
 });
 
 export default router;

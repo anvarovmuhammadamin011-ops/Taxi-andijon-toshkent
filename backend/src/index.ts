@@ -8,6 +8,7 @@ import routesRouter from "./routes/routes";
 import adminRouter from "./routes/admin";
 import configRouter from "./routes/config";
 import { startDeliveryScheduler } from "./services/delivery";
+import { startMonitor } from "./services/monitor";
 
 function loadEnv(): void {
   try {
@@ -45,6 +46,7 @@ if (!process.env.VERCEL) {
     console.log(`🚕 Taxi Collector backend running on http://localhost:${PORT}`);
   });
   startDeliveryScheduler();
+  startMonitor();
 }
 
 export default app;

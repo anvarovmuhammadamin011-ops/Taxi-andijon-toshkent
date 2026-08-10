@@ -1,17 +1,28 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { store } from "../services/store";
 import { sendTelegramMessage } from "../services/delivery";
+import { createToken, verifyPassword, verifyToken } from "../services/auth";
 
 const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
-  const tgId = req.header("x-telegram-id");
-  const tgUsername = req.header("x-telegram-username");
-  if (store.isAdmin(tgId, tgUsername)) {
+  if (verifyToken(req.header("x-admin-token"))) {
     return next();
   }
   return res.status(403).json({ error: "Ruxsat yo'q" });
 };
 
 const router = Router();
+
+router.post("/login", (req, res) => {
+  if (!verifyPassword(req.body?.password)) {
+    return res.status(401).json({ error: "Parol noto'g'ri" });
+  }
+  res.json({ token: createToken() });
+});
+
+router.post("/logout", requireAdmin, (_req, res) => {
+  res.json({ ok: true });
+});
+
 router.use(requireAdmin);
 
 router.get("/dashboard", (_req, res) => {
