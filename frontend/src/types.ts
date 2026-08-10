@@ -30,6 +30,7 @@ export interface Channel {
   postCount: number;
   isActive: boolean;
   addedAt: string;
+  ownerId?: string;
 }
 
 export interface RouteInfo {

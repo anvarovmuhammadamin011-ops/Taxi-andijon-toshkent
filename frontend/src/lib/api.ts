@@ -56,6 +56,11 @@ export const api = {
   },
   channels: () => request<Channel[]>("/api/channels", { headers: userIdHeader() }),
   routes: () => request<RouteInfo[]>("/api/routes", { headers: userIdHeader() }),
+  deleteChannel: (id: string) =>
+    request<{ ok: boolean }>(`/api/channels/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: userIdHeader(),
+    }),
   addChannel: (link: string) =>
     request<Channel>(
       "/api/channels",

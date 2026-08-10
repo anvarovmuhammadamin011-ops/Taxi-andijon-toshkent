@@ -1,16 +1,43 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../context/DataContext";
+import { useToast } from "../context/ToastContext";
 import EmptyState from "../components/EmptyState";
 import { FeedSkeleton } from "../components/Skeletons";
 import { telegram } from "../lib/telegram";
-import { ChevronRightIcon, PlusIcon } from "../components/Icons";
+import { api } from "../lib/api";
+import { ChevronRightIcon, PlusIcon, TrashIcon } from "../components/Icons";
 import AddChannelSheet from "../components/AddChannelSheet";
+import type { Channel } from "../types";
 
 export default function Channels() {
   const { channels, loading, refresh } = useData();
+  const { show } = useToast();
   const navigate = useNavigate();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  const myId = telegram.getUser()?.id ? String(telegram.getUser()!.id) : null;
+
+  const removeChannel = (c: Channel) => {
+    if (confirmId !== c.id) {
+      setConfirmId(c.id);
+      telegram.haptic("light");
+      setTimeout(() => setConfirmId((cur) => (cur === c.id ? null : cur)), 3000);
+      return;
+    }
+    setConfirmId(null);
+    telegram.haptic("medium");
+    void api.deleteChannel(c.id).then((r) => {
+      if (r.ok) {
+        show(`"${c.title}" o'chirildi`, "🗑️");
+        void refresh();
+      } else {
+        telegram.notify("error");
+        show(r.error ?? "O'chirib bo'lmadi", "⚠️");
+      }
+    });
+  };
 
   return (
     <div className="no-scrollbar h-full overflow-y-auto overscroll-contain pb-24">
@@ -43,40 +70,67 @@ export default function Channels() {
             <EmptyState title="Kanallar topilmadi" />
           ) : (
             <div className="space-y-3">
-              {channels.map((c, i) => (
-                <button
-                  key={c.id}
-                  onClick={() => {
-                    telegram.haptic("light");
-                    navigate(`/channel/${c.id}`);
-                  }}
-                  className="press glass-card flex w-full items-center gap-3 rounded-[20px] p-4 animate-fade-in-up"
-                  style={{ animationDelay: `${Math.min(i * 50, 300)}ms` }}
-                >
-                  <div className="tile-gradient flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] text-xl shadow-soft">
-                    🚕
-                  </div>
-                  <div className="min-w-0 flex-1 text-left">
-                    <p className="truncate text-[15px] font-bold text-ink">{c.title}</p>
-                    <p className="text-xs text-text-2">
-                      <span className="font-semibold text-primary">{c.postCount} ta e'lon</span>
-                    </p>
-                  </div>
-                  <span
-                    className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                      c.isActive ? "bg-success/15 text-success" : "bg-error/15 text-error"
-                    }`}
+              {channels.map((c, i) => {
+                const own = Boolean(c.ownerId) && c.ownerId === myId;
+                const confirming = confirmId === c.id;
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => {
+                      telegram.haptic("light");
+                      navigate(`/channel/${c.id}`);
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        navigate(`/channel/${c.id}`);
+                      }
+                    }}
+                    className="press glass-card flex w-full items-center gap-3 rounded-[20px] p-4 animate-fade-in-up"
+                    style={{ animationDelay: `${Math.min(i * 50, 300)}ms` }}
                   >
+                    <div className="tile-gradient flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] text-xl shadow-soft">
+                      🚕
+                    </div>
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="truncate text-[15px] font-bold text-ink">{c.title}</p>
+                      <p className="text-xs text-text-2">
+                        <span className="font-semibold text-primary">{c.postCount} ta e'lon</span>
+                      </p>
+                    </div>
                     <span
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        c.isActive ? "animate-pulse bg-success" : "bg-error"
+                      className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                        c.isActive ? "bg-success/15 text-success" : "bg-error/15 text-error"
                       }`}
-                    />
-                    {c.isActive ? "Faol" : "Pauza"}
-                  </span>
-                  <ChevronRightIcon className="h-5 w-5 shrink-0 text-text-2" />
-                </button>
-              ))}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          c.isActive ? "animate-pulse bg-success" : "bg-error"
+                        }`}
+                      />
+                      {c.isActive ? "Faol" : "Pauza"}
+                    </span>
+                    {own && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeChannel(c);
+                        }}
+                        aria-label={confirming ? "O'chirishni tasdiqlash" : "Kanalni o'chirish"}
+                        className={`press flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${
+                          confirming
+                            ? "bg-error text-bg"
+                            : "bg-card-hi text-text-2 hover:text-error"
+                        }`}
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    )}
+                    <ChevronRightIcon className="h-5 w-5 shrink-0 text-text-2" />
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

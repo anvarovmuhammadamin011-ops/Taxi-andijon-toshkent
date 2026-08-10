@@ -260,6 +260,15 @@ class Store {
     this.save();
   }
 
+  deleteOwnedChannel(id: string, ownerId: string): boolean {
+    const ch = this.channels.find((c) => c.id === id);
+    if (!ch || !ch.ownerId || ch.ownerId !== ownerId) return false;
+    this.channels = this.channels.filter((c) => c.id !== id);
+    this.posts = this.posts.filter((p) => p.channelId !== id);
+    this.save();
+    return true;
+  }
+
   getRoutes(ownerId?: string) {
     const routeSet = new Map<string, { from: string; to: string; count: number }>();
     for (const p of this.visiblePosts(ownerId)) {

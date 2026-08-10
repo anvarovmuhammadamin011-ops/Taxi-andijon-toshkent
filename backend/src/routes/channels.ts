@@ -34,4 +34,15 @@ router.post("/", async (req, res: Response) => {
   res.status(201).json(channel);
 });
 
+router.delete("/:id", (req, res: Response) => {
+  const ownerId = (req.header("x-user-id") ?? "").trim();
+  if (!ownerId) {
+    return res.status(400).json({ error: "Foydalanuvchi aniqlanmadi" });
+  }
+  if (!store.deleteOwnedChannel(req.params.id, ownerId)) {
+    return res.status(403).json({ error: "Bu kanalni o'chira olmaysiz" });
+  }
+  res.json({ ok: true });
+});
+
 export default router;
