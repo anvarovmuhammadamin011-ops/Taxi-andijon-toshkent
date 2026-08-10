@@ -37,6 +37,13 @@ const EMPTY_REVENUE: RevenueStats = {
   history: [],
 };
 
+const SEED_MONITOR_LAST_ID: Record<string, number> = {
+  taxsislar: 254796,
+  Chinabod_Tashkent_Baliqchi: 169966,
+  baliqchi2: 328147,
+  Oltinkol_Toshkent: 109036,
+};
+
 function defaultTargets(): DeliveryTarget[] {
   return [
     {
@@ -94,7 +101,7 @@ class Store {
       this.deliveryTargets = db.deliveryTargets ?? defaultTargets();
       this.deliveryQueue = db.deliveryQueue ?? [];
       this.deliveryConfig = db.deliveryConfig ?? { ...DEFAULT_DELIVERY_CONFIG };
-      this.monitorLastId = db.monitorLastId ?? {};
+      this.monitorLastId = db.monitorLastId ?? { ...SEED_MONITOR_LAST_ID };
     } else {
       this.posts = [];
       this.channels = [];
@@ -107,7 +114,7 @@ class Store {
       this.deliveryTargets = defaultTargets();
       this.deliveryQueue = [];
       this.deliveryConfig = { ...DEFAULT_DELIVERY_CONFIG };
-      this.monitorLastId = {};
+      this.monitorLastId = { ...SEED_MONITOR_LAST_ID };
     }
     this.save();
   }

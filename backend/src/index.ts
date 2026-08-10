@@ -8,7 +8,7 @@ import routesRouter from "./routes/routes";
 import adminRouter from "./routes/admin";
 import configRouter from "./routes/config";
 import { startDeliveryScheduler } from "./services/delivery";
-import { startMonitor } from "./services/monitor";
+import { startMonitor, pollOnce } from "./services/monitor";
 
 function loadEnv(): void {
   try {
@@ -39,6 +39,15 @@ app.use("/api/channels", channelsRouter);
 app.use("/api/routes", routesRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/config", configRouter);
+
+app.post("/api/cron/poll", async (_req, res) => {
+  try {
+    const added = await pollOnce();
+    res.json({ ok: true, added });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
 
 if (!process.env.VERCEL) {
   const PORT = Number(process.env.PORT) || 4000;

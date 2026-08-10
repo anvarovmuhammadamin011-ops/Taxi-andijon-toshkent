@@ -10,9 +10,9 @@ const MONITOR_SOURCES: { username: string; title: string }[] = [
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 const MAX_ID = 2_097_152;
-const BACKFILL_IDS = 5;
+const BACKFILL_IDS = 3;
 const NEW_PROBE_LIMIT = 10;
-const SLEEP_MS = 120;
+const SLEEP_MS = 50;
 
 function decodeEntities(s: string): string {
   return s
@@ -164,16 +164,19 @@ async function pollChannel(ch: Channel, username: string): Promise<number> {
   return added;
 }
 
-export async function pollOnce(): Promise<void> {
+export async function pollOnce(): Promise<number> {
+  let total = 0;
   for (const src of MONITOR_SOURCES) {
     try {
       const ch = store.ensureChannel(src.username, src.title);
       const added = await pollChannel(ch, src.username);
       if (added > 0) console.log(`📡 ${ch.title}: +${added} yangi post`);
+      total += added;
     } catch (e) {
       console.error(`📡 ${src.username}: xato -> ${String(e)}`);
     }
   }
+  return total;
 }
 
 export function startMonitor(): void {

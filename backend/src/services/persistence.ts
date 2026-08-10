@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 
-const DATA_DIR = join(__dirname, "..", "..", "data");
+const DATA_DIR = process.env.VERCEL
+  ? join(process.env.TMPDIR ?? "/tmp", "taxi-data")
+  : join(__dirname, "..", "..", "data");
 const DATA_FILE = join(DATA_DIR, "db.json");
 
 export function loadDb<T>(): T | null {
