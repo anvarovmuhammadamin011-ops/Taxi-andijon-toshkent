@@ -24,7 +24,7 @@ import { parsePost } from "./parser";
 import { findDuplicates } from "./duplicate";
 import { loadDb, saveDb } from "./persistence";
 
-export const DEFAULT_POST_LIMIT = 100;
+export const DEFAULT_POST_LIMIT = 50;
 
 const DEFAULT_DELIVERY_CONFIG: DeliveryConfig = {
   vipDelayMin: 5,

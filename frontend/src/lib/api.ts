@@ -47,7 +47,7 @@ export const api = {
       ok: false,
       data: {
         cities: [],
-        postLimit: 100,
+        postLimit: 50,
         keywords: [],
         plans: [],
         isAdmin: false,
