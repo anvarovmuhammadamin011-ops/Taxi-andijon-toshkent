@@ -7,7 +7,7 @@ import { SearchIcon } from "../components/Icons";
 import BackButton from "../components/BackButton";
 import { telegram } from "../lib/telegram";
 
-const suggestions = ["Toshkent", "Andijon", "Haqqulobod", "Taxi", "992028222", "901234567"];
+const suggestions = ["Toshkent", "Andijon", "Haqqulobod", "992028222", "901234567"];
 
 export default function Search() {
   const { visiblePosts, loading } = useData();

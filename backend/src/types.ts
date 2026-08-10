@@ -106,7 +106,7 @@ export interface IncomingResult {
     to?: string;
     route: string;
   };
-  status: "new" | "duplicate";
+  status: "new" | "duplicate" | "skipped";
   post?: Post;
   duplicatedFrom?: Post;
 }

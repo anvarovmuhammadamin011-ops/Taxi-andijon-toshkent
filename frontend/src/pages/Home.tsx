@@ -15,8 +15,7 @@ const routeFilters: RouteFilter[] = [
 ];
 
 export default function Home() {
-  const { posts, channels, loading, refresh, newPostsCount, showNewPosts, visiblePosts, postKindFilter, setPostKindFilter } =
-    useData();
+  const { posts, channels, loading, refresh, newPostsCount, showNewPosts, visiblePosts } = useData();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<FilterId>("all");
   const [channelFilter, setChannelFilter] = useState<string>("all");
@@ -183,29 +182,6 @@ export default function Home() {
           </button>
         )}
 
-        <div className="mt-4 grid grid-cols-3 gap-1.5 rounded-2xl border border-line bg-card-2 p-1">
-          {[
-            { id: "all" as const, label: "Barchasi" },
-            { id: "passenger" as const, label: "🧑 Yo'lovchi" },
-            { id: "driver" as const, label: "🚕 Haydovchi" },
-          ].map((o) => (
-            <button
-              key={o.id}
-              onClick={() => {
-                telegram.haptic("light");
-                setPostKindFilter(o.id);
-              }}
-              className={`rounded-xl px-2 py-2 text-[12.5px] font-bold transition-all duration-300 ${
-                postKindFilter === o.id
-                  ? "bg-primary text-black shadow-glow"
-                  : "text-text-2 hover:text-ink"
-              }`}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-
         <div className="mt-3">
           <FilterChips filters={routeFilters} active={filter} onChange={(id) => setFilter(id as FilterId)} />
         </div>
@@ -250,15 +226,7 @@ export default function Home() {
         <FeedList
           posts={filtered}
           loading={loading}
-          emptyTitle={
-            filter === "all"
-              ? postKindFilter === "all"
-                ? "E'lonlar yo'q"
-                : postKindFilter === "passenger"
-                  ? "Yo'lovchi e'lonlari yo'q"
-                  : "Haydovchi e'lonlari yo'q"
-              : "Bu yo'nalishda e'lonlar yo'q"
-          }
+          emptyTitle={filter === "all" ? "E'lonlar yo'q" : "Bu yo'nalishda e'lonlar yo'q"}
           emptySubtitle="Boshqa yo'nalish yoki kanalni tanlang"
         />
       </div>

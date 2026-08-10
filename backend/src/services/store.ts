@@ -20,6 +20,15 @@ import { SEED_CHANNELS, SEED_MONITOR_LAST_ID, SEED_POSTS } from "../data/seeds";
 import { parsePost } from "./parser";
 import { findDuplicates } from "./duplicate";
 import { loadDb, saveDb } from "./persistence";
+import { classifyPostKind } from "./postKind";
+
+function isPassenger(kind: string): boolean {
+  return classifyPostKind(kind) === "passenger";
+}
+
+function isPassengerPost(p: Post): boolean {
+  return isPassenger(p.text);
+}
 
 export const DEFAULT_POST_LIMIT = 50;
 
@@ -110,6 +119,7 @@ class Store {
       this.deliveryConfig = { ...DEFAULT_DELIVERY_CONFIG };
       this.monitorLastId = { ...SEED_MONITOR_LAST_ID };
     }
+    this.posts = this.posts.filter(isPassengerPost);
     this.save();
   }
 
@@ -305,6 +315,10 @@ class Store {
 
   addIncoming(raw: string, channel?: Channel): IncomingResult {
     const sourceChannel = channel ?? this.channels[0];
+    if (!isPassenger(raw)) {
+      const fallback = parsePost(raw);
+      return { raw, parsed: fallback, status: "skipped" };
+    }
     const parsed = parsePost(raw);
     const nowIso = new Date().toISOString();
 
@@ -355,6 +369,7 @@ class Store {
     postedAt: string;
   }): IncomingResult | null {
     if (this.hasMessage(input.channel.id, input.messageId)) return null;
+    if (!isPassenger(input.text)) return null;
     const parsed = parsePost(input.text);
     const candidate: Post = {
       id: `p${this.seq++}`,
