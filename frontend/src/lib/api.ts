@@ -1,16 +1,29 @@
 import { AppConfig, AppUser, Channel, DashboardStats, DeliveryConfig, DeliveryTarget, DeliveryTask, IncomingResult, Post, RevenueStats, RouteInfo } from "../types";
 import { getAdminToken } from "./adminAuth";
 
-async function request<T>(path: string, init?: RequestInit): Promise<{ data: T; ok: boolean }> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  timeoutMs = 5000
+): Promise<{ data: T; ok: boolean; error?: string; status?: number }> {
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(path, { ...init, signal: controller.signal });
     clearTimeout(timer);
-    if (!res.ok) return { data: undefined as T, ok: false };
-    return { data: (await res.json()) as T, ok: true };
+    if (!res.ok) {
+      let error = String(res.status);
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body?.error) error = body.error;
+      } catch {
+        /* noop */
+      }
+      return { data: undefined as T, ok: false, error, status: res.status };
+    }
+    return { data: (await res.json()) as T, ok: true, status: res.status };
   } catch {
-    return { data: undefined as T, ok: false };
+    return { data: undefined as T, ok: false, status: 0 };
   }
 }
 
@@ -36,6 +49,7 @@ export const api = {
     return request<Post[]>(`/api/posts${qs ? `?${qs}` : ""}`);
   },
   channels: () => request<Channel[]>("/api/channels"),
+  addChannel: (link: string) => request<Channel>("/api/channels", adminInit("POST", { link }), 15000),
   routes: () => request<RouteInfo[]>("/api/routes"),
   config: async () => {
     const token = getAdminToken();

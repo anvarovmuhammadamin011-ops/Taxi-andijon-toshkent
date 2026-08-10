@@ -1,19 +1,41 @@
 import { store } from "./store";
 import type { Channel } from "../types";
 
-const MONITOR_SOURCES: { username: string; title: string }[] = [
-  { username: "taxsislar", title: "Taksilar" },
-  { username: "baliqchi2", title: "Baliqchi 2" },
-  { username: "Chinabod_Tashkent_Baliqchi", title: "Chinabod Tashkent Baliqchi" },
-  { username: "Oltinkol_Toshkent", title: "Oltinkol Toshkent" },
-];
-
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 const MAX_ID = 2_097_152;
 const BACKFILL_IDS = 3;
 const NEW_PROBE_LIMIT = 6;
 const SLEEP_MS = 40;
 const FETCH_TIMEOUT_MS = 8000;
+
+export function usernameFromUrl(url: string): string {
+  return url
+    .replace(/^https:\/\/t\.me\//, "")
+    .replace(/^t\.me\//, "")
+    .replace(/^@/, "")
+    .trim();
+}
+
+export async function fetchChannelTitle(username: string): Promise<string | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(`https://t.me/${encodeURIComponent(username)}`, {
+      headers: { "User-Agent": UA, "Accept-Language": "uz,ru,en;q=0.8" },
+      signal: ctrl.signal,
+    });
+    const html = await res.text();
+    const meta =
+      html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i) ??
+      html.match(/<title>([^<]+)<\/title>/i);
+    if (!meta) return null;
+    return decodeEntities(meta[1].trim()).replace(/\s+/g, " ");
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function decodeEntities(s: string): string {
   return s
@@ -107,8 +129,7 @@ async function findTop(username: string): Promise<number> {
   return lo;
 }
 
-async function addIfText(ch: Channel, id: number): Promise<boolean> {
-  const username = ch.url.replace("https://t.me/", "").replace(/^@/, "");
+async function addIfText(ch: Channel, username: string, id: number): Promise<boolean> {
   const r = await embedMessage(username, id);
   if (r.flood) await new Promise((res) => setTimeout(res, 1500));
   if (r.found && r.text) {
@@ -135,7 +156,7 @@ async function pollChannel(ch: Channel, username: string): Promise<number> {
     store.setMonitorLastId(username, top);
     let added = 0;
     for (let id = top; id > top - BACKFILL_IDS; id--) {
-      if (await addIfText(ch, id)) added++;
+      if (await addIfText(ch, username, id)) added++;
       await new Promise((res) => setTimeout(res, SLEEP_MS));
     }
     console.log(`📡 ${ch.title}: boshlang'ich ${added} ta post yig'ildi (top=${top})`);
@@ -176,14 +197,15 @@ async function pollChannel(ch: Channel, username: string): Promise<number> {
 
 export async function pollOnce(): Promise<number> {
   const results = await Promise.all(
-    MONITOR_SOURCES.map(async (src) => {
+    store.getActiveChannels().map(async (ch) => {
       try {
-        const ch = store.ensureChannel(src.username, src.title);
-        const added = await pollChannel(ch, src.username);
+        const username = usernameFromUrl(ch.url);
+        if (!username) return 0;
+        const added = await pollChannel(ch, username);
         if (added > 0) console.log(`📡 ${ch.title}: +${added} yangi post`);
         return added;
       } catch (e) {
-        console.error(`📡 ${src.username}: xato -> ${String(e)}`);
+        console.error(`📡 ${ch.title}: xato -> ${String(e)}`);
         return 0;
       }
     })
@@ -207,7 +229,9 @@ export async function pollIfStale(maxAgeMs = 30_000): Promise<number> {
 }
 
 export function startMonitor(): void {
-  console.log(`📡 Kanal monitori ishga tushdi (${MONITOR_SOURCES.length} kanal, har 60 soniyada)`);
+  console.log(
+    `📡 Kanal monitori ishga tushdi (${store.getActiveChannels().length} kanal, har 60 soniyada)`
+  );
   pollOnce().catch(console.error);
   setInterval(() => pollOnce().catch(console.error), 60_000);
 }

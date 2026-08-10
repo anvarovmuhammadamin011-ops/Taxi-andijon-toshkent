@@ -163,6 +163,16 @@ class Store {
     }));
   }
 
+  getActiveChannels(): Channel[] {
+    return this.channels.filter((c) => c.isActive);
+  }
+
+  findChannelByUrl(url: string): Channel | undefined {
+    const clean = url.replace(/^@/, "https://t.me/").replace(/^t\.me\//, "https://t.me/");
+    const normalized = clean.startsWith("http") ? clean : `https://t.me/${clean}`;
+    return this.channels.find((c) => c.url.toLowerCase() === normalized.toLowerCase());
+  }
+
   addChannel(title: string, url: string): Channel {
     const id = "ch" + (this.channels.length + 100);
     const cleanUrl = url.replace(/^@/, "https://t.me/").replace(/^t\.me\//, "https://t.me/");
@@ -209,6 +219,13 @@ class Store {
   setMonitorLastId(username: string, id: number): void {
     this.monitorLastId[username] = id;
     this.save();
+  }
+
+  resetMonitorLastId(username: string): void {
+    if (this.monitorLastId[username] !== undefined) {
+      delete this.monitorLastId[username];
+      this.save();
+    }
   }
 
   setChannelActive(id: string, isActive: boolean): Channel | undefined {

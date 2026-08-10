@@ -1,23 +1,40 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../context/DataContext";
 import EmptyState from "../components/EmptyState";
 import { FeedSkeleton } from "../components/Skeletons";
 import { telegram } from "../lib/telegram";
-import { ChevronRightIcon } from "../components/Icons";
+import { ChevronRightIcon, PlusIcon } from "../components/Icons";
+import AddChannelSheet from "../components/AddChannelSheet";
 
 export default function Channels() {
-  const { channels, loading } = useData();
+  const { channels, loading, refresh } = useData();
   const navigate = useNavigate();
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   return (
     <div className="no-scrollbar h-full overflow-y-auto overscroll-contain pb-24">
       <div className="px-4 pt-4 safe-top">
-        <h1 className="text-2xl font-extrabold tracking-wide">
-          Ka<span className="text-primary">nallar</span>
-        </h1>
-        <p className="mt-0.5 text-[13px] text-text-2">
-          Qaysi kanal ulangan bo'lsa, e'lonlari shu yerda ko'rinadi
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-extrabold tracking-wide">
+              Ka<span className="text-primary">nallar</span>
+            </h1>
+            <p className="mt-0.5 text-[13px] text-text-2">
+              Qaysi kanal ulangan bo'lsa, e'lonlari shu yerda ko'rinadi
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              telegram.haptic("light");
+              setSheetOpen(true);
+            }}
+            aria-label="Kanal qo'shish"
+            className="press flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-primary text-black shadow-soft"
+          >
+            <PlusIcon className="h-5 w-5" />
+          </button>
+        </div>
 
         <div className="mt-4">
           {loading ? (
@@ -63,6 +80,13 @@ export default function Channels() {
             </div>
           )}
         </div>
+        <AddChannelSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          onAdded={() => {
+            void refresh();
+          }}
+        />
       </div>
     </div>
   );
