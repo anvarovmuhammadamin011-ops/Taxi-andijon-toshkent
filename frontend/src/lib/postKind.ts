@@ -77,6 +77,7 @@ const PASSENGER_PATTERNS: RegExp[] = [
   /erta\s+(ketish|borish|chiqish)\s+bor/i,
   /borish\s+kerak/i,
   /ketish\s+kerak/i,
+  /(borish|ketish|qaytish)\s+[kк][kк]\b/i,
   /yo[']l\s+(izlay|qidi)/i,
   /transport\s+(qidi|kerak)/i,
   /sayohat/i,
