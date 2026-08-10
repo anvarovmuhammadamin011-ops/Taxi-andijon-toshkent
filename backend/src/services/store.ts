@@ -130,8 +130,8 @@ class Store {
     });
   }
 
-  getPosts(query?: string, route?: string, channel?: string, since?: string): Post[] {
-    let list = [...this.posts];
+  getPosts(query?: string, route?: string, channel?: string, since?: string, ownerId?: string): Post[] {
+    let list = this.visiblePosts(ownerId);
     const q = query?.toLowerCase().trim();
     if (q) {
       list = list.filter((p) =>
@@ -152,8 +152,11 @@ class Store {
     return list.sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
   }
 
-  getPost(id: string): Post | undefined {
-    return this.posts.find((p) => p.id === id);
+  getPost(id: string, ownerId?: string): Post | undefined {
+    const post = this.posts.find((p) => p.id === id);
+    if (!post) return undefined;
+    if (post.ownerId && post.ownerId !== ownerId) return undefined;
+    return post;
   }
 
   getChannels(): Channel[] {
@@ -161,6 +164,21 @@ class Store {
       ...c,
       postCount: this.posts.filter((p) => p.channelId === c.id).length,
     }));
+  }
+
+  getChannelsForOwner(ownerId?: string): Channel[] {
+    const visible = this.visiblePosts(ownerId);
+    return this.channels
+      .filter((c) => !c.ownerId || (ownerId && c.ownerId === ownerId))
+      .map((c) => ({
+        ...c,
+        postCount: visible.filter((p) => p.channelId === c.id).length,
+      }));
+  }
+
+  private visiblePosts(ownerId?: string): Post[] {
+    if (!ownerId) return this.posts.filter((p) => !p.ownerId);
+    return this.posts.filter((p) => !p.ownerId || p.ownerId === ownerId);
   }
 
   getActiveChannels(): Channel[] {
@@ -173,7 +191,7 @@ class Store {
     return this.channels.find((c) => c.url.toLowerCase() === normalized.toLowerCase());
   }
 
-  addChannel(title: string, url: string): Channel {
+  addChannel(title: string, url: string, ownerId?: string): Channel {
     const id = "ch" + (this.channels.length + 100);
     const cleanUrl = url.replace(/^@/, "https://t.me/").replace(/^t\.me\//, "https://t.me/");
     const channel: Channel = {
@@ -183,6 +201,7 @@ class Store {
       postCount: 0,
       isActive: true,
       addedAt: new Date().toISOString(),
+      ownerId: ownerId || undefined,
     };
     this.channels.push(channel);
     this.save();
@@ -241,9 +260,9 @@ class Store {
     this.save();
   }
 
-  getRoutes() {
+  getRoutes(ownerId?: string) {
     const routeSet = new Map<string, { from: string; to: string; count: number }>();
-    for (const p of this.posts) {
+    for (const p of this.visiblePosts(ownerId)) {
       const key = `${p.from} -> ${p.to}`;
       const existing = routeSet.get(key);
       if (existing) existing.count++;
@@ -294,6 +313,7 @@ class Store {
       postedAt: nowIso,
       messageId: Math.floor(Math.random() * 9000) + 1000,
       alsoIn: [],
+      ownerId: sourceChannel.ownerId,
     };
 
     const dups = findDuplicates(candidate, this.posts, parsed.phone);
@@ -341,6 +361,7 @@ class Store {
       postedAt: input.postedAt,
       messageId: input.messageId,
       alsoIn: [],
+      ownerId: input.channel.ownerId,
     };
 
     const dups = findDuplicates(candidate, this.posts, parsed.phone);

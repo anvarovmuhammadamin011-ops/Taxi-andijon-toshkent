@@ -22,6 +22,7 @@ export interface Post {
   postedAt: string;
   messageId: number;
   alsoIn: PostSource[];
+  ownerId?: string;
 }
 
 export interface Channel {
@@ -32,6 +33,7 @@ export interface Channel {
   postCount: number;
   isActive: boolean;
   addedAt: string;
+  ownerId?: string;
 }
 
 export interface RouteInfo {

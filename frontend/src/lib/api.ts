@@ -1,5 +1,11 @@
 import { AppConfig, AppUser, Channel, DashboardStats, DeliveryConfig, DeliveryTarget, DeliveryTask, IncomingResult, Post, RevenueStats, RouteInfo } from "../types";
 import { getAdminToken } from "./adminAuth";
+import { telegram } from "./telegram";
+
+export function userIdHeader(): Record<string, string> {
+  const user = telegram.getUser();
+  return user?.id ? { "x-user-id": String(user.id) } : {};
+}
 
 async function request<T>(
   path: string,
@@ -46,11 +52,20 @@ export const api = {
     if (route) params.set("route", route);
     if (since) params.set("since", since);
     const qs = params.toString();
-    return request<Post[]>(`/api/posts${qs ? `?${qs}` : ""}`);
+    return request<Post[]>(`/api/posts${qs ? `?${qs}` : ""}`, { headers: userIdHeader() });
   },
-  channels: () => request<Channel[]>("/api/channels"),
-  addChannel: (link: string) => request<Channel>("/api/channels", adminInit("POST", { link }), 15000),
-  routes: () => request<RouteInfo[]>("/api/routes"),
+  channels: () => request<Channel[]>("/api/channels", { headers: userIdHeader() }),
+  routes: () => request<RouteInfo[]>("/api/routes", { headers: userIdHeader() }),
+  addChannel: (link: string) =>
+    request<Channel>(
+      "/api/channels",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...userIdHeader() },
+        body: JSON.stringify({ link }),
+      },
+      15000
+    ),
   config: async () => {
     const token = getAdminToken();
     const headers: Record<string, string> = {};

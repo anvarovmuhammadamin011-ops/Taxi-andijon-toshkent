@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { AppConfig, Channel, IncomingResult, Post, RouteInfo, UserProfile } from "../types";
-import { api } from "../lib/api";
+import { api, userIdHeader } from "../lib/api";
 import { classifyPostKind } from "../lib/postKind";
 import { telegram } from "../lib/telegram";
 
@@ -89,7 +89,7 @@ async function safeFetch<T>(url: string, fallback: T): Promise<{ data: T; ok: bo
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 4000);
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, { headers: userIdHeader(), signal: controller.signal });
     clearTimeout(timer);
     if (!res.ok) throw new Error(String(res.status));
     return { data: (await res.json()) as T, ok: true };
