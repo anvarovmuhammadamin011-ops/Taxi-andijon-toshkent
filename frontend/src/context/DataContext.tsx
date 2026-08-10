@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from "react";
 import { AppConfig, Channel, IncomingResult, Post, RouteInfo, UserProfile } from "../types";
-import { demoChannels, demoPosts, demoRoutes } from "../data/demo";
 import { api } from "../lib/api";
 import { telegram } from "../lib/telegram";
 
@@ -84,9 +83,9 @@ async function safeFetch<T>(url: string, fallback: T): Promise<{ data: T; ok: bo
 }
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const [posts, setPosts] = useState<Post[]>(demoPosts);
-  const [channels, setChannels] = useState<Channel[]>(demoChannels);
-  const [routes, setRoutes] = useState<RouteInfo[]>(demoRoutes);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [routes, setRoutes] = useState<RouteInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [usingDemo, setUsingDemo] = useState(true);
   const [favorites, setFavorites] = useState<Set<string>>(loadFavorites);
@@ -128,9 +127,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     setLoading(true);
     const [p, c, r] = await Promise.all([
-      safeFetch<Post[]>("/api/posts", demoPosts),
-      safeFetch<Channel[]>("/api/channels", demoChannels),
-      safeFetch<RouteInfo[]>("/api/routes", demoRoutes),
+      safeFetch<Post[]>("/api/posts", []),
+      safeFetch<Channel[]>("/api/channels", []),
+      safeFetch<RouteInfo[]>("/api/routes", []),
     ]);
     setPosts(p.data);
     setChannels(c.data);

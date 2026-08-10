@@ -12,12 +12,8 @@ import {
   RevenueStats,
 } from "../types";
 import {
-  demoChannels,
   demoKeywords,
   demoPlans,
-  demoPosts,
-  demoRevenue,
-  demoUsers,
   rawSamples,
 } from "../data/demo";
 import { parsePost } from "./parser";
@@ -30,6 +26,15 @@ const DEFAULT_DELIVERY_CONFIG: DeliveryConfig = {
   vipDelayMin: 5,
   regularDelayMin: 8,
   priorityDelaySec: 0,
+};
+
+const EMPTY_REVENUE: RevenueStats = {
+  today: 0,
+  month: 0,
+  total: 0,
+  vipUsers: 0,
+  payments: 0,
+  history: [],
 };
 
 function defaultTargets(): DeliveryTarget[] {
@@ -78,26 +83,26 @@ class Store {
   constructor() {
     const db = loadDb<DbState>();
     if (db) {
-      this.posts = db.posts ?? [...demoPosts];
-      this.channels = db.channels ?? [...demoChannels];
-      this.users = db.users ?? [...demoUsers];
-      this.revenue = db.revenue ?? { ...demoRevenue, history: [...demoRevenue.history] };
+      this.posts = db.posts ?? [];
+      this.channels = db.channels ?? [];
+      this.users = db.users ?? [];
+      this.revenue = db.revenue ?? { ...EMPTY_REVENUE, history: [] };
       this.keywords = db.keywords ?? [...demoKeywords];
       this.postLimit = db.postLimit ?? DEFAULT_POST_LIMIT;
-      this.seq = db.seq ?? demoPosts.length + 100;
+      this.seq = db.seq ?? 100;
       this.dseq = db.dseq ?? 100;
       this.deliveryTargets = db.deliveryTargets ?? defaultTargets();
       this.deliveryQueue = db.deliveryQueue ?? [];
       this.deliveryConfig = db.deliveryConfig ?? { ...DEFAULT_DELIVERY_CONFIG };
       this.monitorLastId = db.monitorLastId ?? {};
     } else {
-      this.posts = [...demoPosts];
-      this.channels = [...demoChannels];
-      this.users = [...demoUsers];
-      this.revenue = { ...demoRevenue, history: [...demoRevenue.history] };
+      this.posts = [];
+      this.channels = [];
+      this.users = [];
+      this.revenue = { ...EMPTY_REVENUE, history: [] };
       this.keywords = [...demoKeywords];
       this.postLimit = DEFAULT_POST_LIMIT;
-      this.seq = demoPosts.length + 100;
+      this.seq = 100;
       this.dseq = 100;
       this.deliveryTargets = defaultTargets();
       this.deliveryQueue = [];

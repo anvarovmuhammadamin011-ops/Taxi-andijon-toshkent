@@ -10,7 +10,7 @@ const MONITOR_SOURCES: { username: string; title: string }[] = [
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 const MAX_ID = 2_097_152;
-const BACKFILL_IDS = 60;
+const BACKFILL_IDS = 5;
 const NEW_PROBE_LIMIT = 10;
 const SLEEP_MS = 120;
 
