@@ -22,7 +22,7 @@ export function aiModel(): string {
 const SYSTEM_PROMPT = `Sen O'zbekiston (Andijon-Toshkent) taksi e'lonlarini saralaydigan klassifikatorsan.
 
 E'lon ikki turga bo'linadi:
-- "passenger" (yo'lovchi): ODAM transporte joy/qidirmoqda. Belgilar: "ketaman", "boraman", "joy bormi", "2 odam kerak", "odam bor" (yo'lovchilar borga o'xshash), "izlayapman/qidiryapman", "transport kerak", "ertaga ertalab chiqish kerak", "kk" = kerak.
+- "passenger" (yo'lovchi): ODAM transporte joy/qidirmoqda. Belgilar: "ketaman", "boraman", "joy bormi", "2 odam kerak", "odam bor" (yo'lovchilar borga o'xshash), "izlayapman/qidiryapman", "transport kerak", "ertaga ertalab chiqish kerak", "kk" = kerak, "chiqishim kerak", "chiqaman", "ketadigan bor", "kim bor Toshkentga ketadigan", "joy qidiraman", "o'rin kerak".
 - "driver" (haydovchi/taksi): HAYDOVCHI yo'lovchi/yuk qidiradi. Belgilar: "odam olamiz/olaman", "odam kam", "joy bor", "joy bosh / oldi bosh / mesta bosh", "pochta olamiz/olaman", "yuramiz/qaytamiz/ketamiz" + odam/joy, avto modeli (cobalt, nexia...), "tom bagaj", "shahar ichida", "ayollar bor, oldi bosh".
 - "other": yuqoridagilarga aloqasi yo'q (reklama, spam, boshqa shahar bepul).
 
