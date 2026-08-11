@@ -2,13 +2,15 @@ import { store } from "./store";
 import type { Channel } from "../types";
 import { classifyWithAI } from "./aiClassify";
 import { pushNotifyPhone } from "./notify";
+import { acquireLock, releaseLock } from "./persistence";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 const MAX_ID = 2_097_152;
-const BACKFILL_IDS = 3;
-const NEW_PROBE_LIMIT = 6;
+const BACKFILL_IDS = 6;
+const NEW_PROBE_LIMIT = 12;
 const SLEEP_MS = 40;
 const FETCH_TIMEOUT_MS = 8000;
+const LOCK_TTL_MS = 50_000;
 
 export function usernameFromUrl(url: string): string {
   return url
@@ -168,9 +170,11 @@ async function pollChannel(ch: Channel, username: string): Promise<number> {
     return added;
   }
   if (last < 0) return 0;
+
+  // Har poll'da kanalning actual TOP ini aniqlaymiz; margin orqaga qadam to'xtamaydi
   let id = last + 1;
   let added = 0;
-  let misses = 0;
+  let missed = 0;
   for (let i = 0; i < NEW_PROBE_LIMIT; i++) {
     const r = await embedMessage(username, id);
     if (r.flood) {
@@ -178,12 +182,12 @@ async function pollChannel(ch: Channel, username: string): Promise<number> {
       break;
     }
     if (!r.found) {
-      misses++;
-      if (misses >= 2) break;
+      missed++;
+      if (missed >= 2) break;
       id++;
       continue;
     }
-    misses = 0;
+    missed = 0;
     if (r.text) {
       const kind = await classifyWithAI(r.text);
       if (kind === "passenger") {
@@ -201,26 +205,39 @@ async function pollChannel(ch: Channel, username: string): Promise<number> {
     id++;
     await new Promise((res) => setTimeout(res, SLEEP_MS));
   }
+
+  // Debug: agar kanal hozirgi top dan ancha yuqorida bo'lsa, keyingi poll yetib olishi uchun
+  // probelarni tezlashtirish kerak — shuning uchun NEW_PROBE_LIMIT ni oshirdik.
+
   return added;
 }
 
 export async function pollOnce(): Promise<number> {
   await store.ready();
-  const results = await Promise.all(
-    store.getActiveChannels().map(async (ch) => {
-      try {
-        const username = usernameFromUrl(ch.url);
-        if (!username) return 0;
-        const added = await pollChannel(ch, username);
-        if (added > 0) console.log(`📡 ${ch.title}: +${added} yangi post`);
-        return added;
-      } catch (e) {
-        console.error(`📡 ${ch.title}: xato -> ${String(e)}`);
-        return 0;
-      }
-    })
-  );
-  return results.reduce((sum, n) => sum + n, 0);
+  const lockToken = await acquireLock("taxi:monitor_lock");
+  if (!lockToken) {
+    // Boshqa instansiya poll qilyapti — o'shanga qoldiramiz
+    return 0;
+  }
+  try {
+    const results = await Promise.all(
+      store.getActiveChannels().map(async (ch) => {
+        try {
+          const username = usernameFromUrl(ch.url);
+          if (!username) return 0;
+          const added = await pollChannel(ch, username);
+          if (added > 0) console.log(`📡 ${ch.title}: +${added} yangi post`);
+          return added;
+        } catch (e) {
+          console.error(`📡 ${ch.title}: xato -> ${String(e)}`);
+          return 0;
+        }
+      })
+    );
+    return results.reduce((sum, n) => sum + n, 0);
+  } finally {
+    await releaseLock("taxi:monitor_lock", lockToken);
+  }
 }
 
 let lastPolledAt = 0;

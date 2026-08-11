@@ -39,6 +39,34 @@ async function kvSet(value: string): Promise<boolean> {
   }
 }
 
+export async function acquireLock(key: string, ttlMs = 50_000): Promise<string | null> {
+  if (!useKv) return "local-" + Date.now();
+  const token = Math.random().toString(36).slice(2) + Date.now();
+  try {
+    const res = await fetch(
+      `${KV_URL}/set/${encodeURIComponent(key)}/${encodeURIComponent(token)}/NX/EX/${Math.ceil(ttlMs / 1000)}`,
+      { headers: { Authorization: `Bearer ${KV_TOKEN}` }, signal: AbortSignal.timeout(5000) }
+    );
+    const j = (await res.json()) as { result?: string | null };
+    return j.result === "OK" ? token : null;
+  } catch (e) {
+    console.error("KV lock olishda xato:", e);
+    return null;
+  }
+}
+
+export async function releaseLock(key: string, _token: string): Promise<void> {
+  if (!useKv) return;
+  try {
+    await fetch(`${KV_URL}/del/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${KV_TOKEN}` },
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (e) {
+    console.error("KV lock bo'shatishda xato:", e);
+  }
+}
+
 function loadLocal(): string | null {
   try {
     if (existsSync(LOCAL_FILE)) return readFileSync(LOCAL_FILE, "utf8");
