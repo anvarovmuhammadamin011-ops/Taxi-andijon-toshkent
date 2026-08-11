@@ -19,7 +19,7 @@ import {
 import { SEED_CHANNELS, SEED_MONITOR_LAST_ID, SEED_POSTS } from "../data/seeds";
 import { parsePost } from "./parser";
 import { findDuplicates } from "./duplicate";
-import { loadDb, saveDb } from "./persistence";
+import { loadDbAsync, saveDb } from "./persistence";
 import { classifyPostKind } from "./postKind";
 
 function isPassenger(kind: string): boolean {
@@ -89,38 +89,46 @@ class Store {
   private deliveryQueue: DeliveryTask[];
   private deliveryConfig: DeliveryConfig;
   private monitorLastId: Record<string, number> = {};
+  private readyPromise: Promise<void>;
 
   constructor() {
-    const db = loadDb<DbState>();
+    this.posts = [...SEED_POSTS];
+    this.channels = [...SEED_CHANNELS];
+    this.users = [];
+    this.revenue = { ...EMPTY_REVENUE, history: [] };
+    this.keywords = [...demoKeywords];
+    this.postLimit = DEFAULT_POST_LIMIT;
+    this.seq = 2000;
+    this.dseq = 200;
+    this.deliveryTargets = defaultTargets();
+    this.deliveryQueue = [];
+    this.deliveryConfig = { ...DEFAULT_DELIVERY_CONFIG };
+    this.monitorLastId = { ...SEED_MONITOR_LAST_ID };
+    this.posts = this.posts.filter(isPassengerPost);
+    this.readyPromise = this.hydrate();
+  }
+
+  private async hydrate(): Promise<void> {
+    const db = await loadDbAsync<DbState>();
     if (db) {
-      this.posts = db.posts ?? [];
+      this.posts = (db.posts ?? []).filter(isPassengerPost);
       this.channels = db.channels ?? [];
       this.users = db.users ?? [];
       this.revenue = db.revenue ?? { ...EMPTY_REVENUE, history: [] };
       this.keywords = db.keywords ?? [...demoKeywords];
       this.postLimit = db.postLimit ?? DEFAULT_POST_LIMIT;
-      this.seq = db.seq ?? 100;
-      this.dseq = db.dseq ?? 100;
+      this.seq = db.seq ?? 2000;
+      this.dseq = db.dseq ?? 200;
       this.deliveryTargets = db.deliveryTargets ?? defaultTargets();
       this.deliveryQueue = db.deliveryQueue ?? [];
       this.deliveryConfig = db.deliveryConfig ?? { ...DEFAULT_DELIVERY_CONFIG };
       this.monitorLastId = db.monitorLastId ?? { ...SEED_MONITOR_LAST_ID };
-    } else {
-      this.posts = [...SEED_POSTS];
-      this.channels = [...SEED_CHANNELS];
-      this.users = [];
-      this.revenue = { ...EMPTY_REVENUE, history: [] };
-      this.keywords = [...demoKeywords];
-      this.postLimit = DEFAULT_POST_LIMIT;
-      this.seq = 2000;
-      this.dseq = 200;
-      this.deliveryTargets = defaultTargets();
-      this.deliveryQueue = [];
-      this.deliveryConfig = { ...DEFAULT_DELIVERY_CONFIG };
-      this.monitorLastId = { ...SEED_MONITOR_LAST_ID };
     }
-    this.posts = this.posts.filter(isPassengerPost);
     this.save();
+  }
+
+  async ready(): Promise<void> {
+    return this.readyPromise;
   }
 
   private save(): void {

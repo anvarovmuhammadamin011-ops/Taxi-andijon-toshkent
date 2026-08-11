@@ -205,6 +205,7 @@ async function pollChannel(ch: Channel, username: string): Promise<number> {
 }
 
 export async function pollOnce(): Promise<number> {
+  await store.ready();
   const results = await Promise.all(
     store.getActiveChannels().map(async (ch) => {
       try {
