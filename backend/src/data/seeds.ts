@@ -8,6 +8,7 @@ export const SEED_MONITOR_LAST_ID: Record<string, number> = {
   s_Sobir_2007: 229375,
   Baliqchi_Chinobod_Ulugnor_107: 524704,
   Baliqchi_Chinabot: 76637,
+  tashkent560: 711277,
 };
 
 export const SEED_CHANNELS: Channel[] = [
@@ -66,6 +67,14 @@ export const SEED_CHANNELS: Channel[] = [
     postCount: 0,
     isActive: true,
     addedAt: "2026-08-11T03:40:00.000Z",
+  },
+  {
+    id: "mctashkent560",
+    title: "Tashkent 560",
+    url: "https://t.me/tashkent560",
+    postCount: 0,
+    isActive: true,
+    addedAt: "2026-08-11T05:10:00.000Z",
   },
 ];
 
