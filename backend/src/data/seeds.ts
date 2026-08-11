@@ -5,6 +5,9 @@ export const SEED_MONITOR_LAST_ID: Record<string, number> = {
   Chinabod_Tashkent_Baliqchi: 169966,
   baliqchi2: 328147,
   Oltinkol_Toshkent: 109036,
+  s_Sobir_2007: 229375,
+  Baliqchi_Chinobod_Ulugnor_107: 524704,
+  Baliqchi_Chinabot: 76637,
 };
 
 export const SEED_CHANNELS: Channel[] = [
@@ -39,6 +42,30 @@ export const SEED_CHANNELS: Channel[] = [
     postCount: 0,
     isActive: true,
     addedAt: "2026-08-09T17:15:30.107Z",
+  },
+  {
+    id: "mcs_sobir_2007",
+    title: "S.Sobir 2007",
+    url: "https://t.me/s_Sobir_2007",
+    postCount: 0,
+    isActive: true,
+    addedAt: "2026-08-11T03:40:00.000Z",
+  },
+  {
+    id: "mcbaliqchi_chinobod_ulugnor_107",
+    title: "Baliqchi Chinobod Ulugnor 107",
+    url: "https://t.me/Baliqchi_Chinobod_Ulugnor_107",
+    postCount: 0,
+    isActive: true,
+    addedAt: "2026-08-11T03:40:00.000Z",
+  },
+  {
+    id: "mcbaliqchi_chinabot",
+    title: "Baliqchi Chinabot",
+    url: "https://t.me/Baliqchi_Chinabot",
+    postCount: 0,
+    isActive: true,
+    addedAt: "2026-08-11T03:40:00.000Z",
   },
 ];
 
