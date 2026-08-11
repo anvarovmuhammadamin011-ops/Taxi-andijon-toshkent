@@ -131,6 +131,15 @@ class Store {
     return this.readyPromise;
   }
 
+  clearAll(): void {
+    this.posts = [];
+    this.channels = [...SEED_CHANNELS];
+    this.monitorLastId = { ...SEED_MONITOR_LAST_ID };
+    this.deliveryQueue = [];
+    this.seq = 2000;
+    this.save();
+  }
+
   private save(): void {
     saveDb<DbState>({
       posts: this.posts,

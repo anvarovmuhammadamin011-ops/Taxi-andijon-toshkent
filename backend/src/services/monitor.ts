@@ -6,8 +6,8 @@ import { acquireLock, releaseLock } from "./persistence";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 const MAX_ID = 2_097_152;
-const BACKFILL_IDS = 6;
-const NEW_PROBE_LIMIT = 12;
+const BACKFILL_IDS = 30;
+const NEW_PROBE_LIMIT = 50;
 const SLEEP_MS = 40;
 const FETCH_TIMEOUT_MS = 8000;
 const LOCK_TTL_MS = 50_000;
@@ -261,4 +261,44 @@ export function startMonitor(): void {
   );
   pollOnce().catch(console.error);
   setInterval(() => pollOnce().catch(console.error), 60_000);
+}
+
+export async function rescanChannels(): Promise<{
+  channels: number;
+  added: number;
+  details: Array<{ title: string; username: string; top: number; added: number }>;
+}> {
+  await store.ready();
+  const lockToken = await acquireLock("taxi:monitor_lock");
+  if (!lockToken) {
+    return { channels: 0, added: 0, details: [] };
+  }
+  const details: Array<{ title: string; username: string; top: number; added: number }> = [];
+  let totalAdded = 0;
+  try {
+    const channels = store.getActiveChannels();
+    for (const ch of channels) {
+      const username = usernameFromUrl(ch.url);
+      if (!username) continue;
+      store.resetMonitorLastId(username);
+      const top = await findTop(username);
+      if (top <= 0) {
+        store.setMonitorLastId(username, -1);
+        details.push({ title: ch.title, username, top: 0, added: 0 });
+        continue;
+      }
+      store.setMonitorLastId(username, top);
+      let added = 0;
+      for (let id = top; id > top - BACKFILL_IDS; id--) {
+        if (await addIfText(ch, username, id)) added++;
+        await new Promise((res) => setTimeout(res, SLEEP_MS));
+      }
+      totalAdded += added;
+      details.push({ title: ch.title, username, top, added });
+      console.log(`📡 ${ch.title}: rescan top=${top}, +${added} post`);
+    }
+  } finally {
+    await releaseLock("taxi:monitor_lock", lockToken);
+  }
+  return { channels: details.length, added: totalAdded, details };
 }

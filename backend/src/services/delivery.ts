@@ -31,7 +31,7 @@ export async function sendTelegramMessage(
         disable_web_page_preview: true,
       }),
     });
-    const json = await res.json();
+    const json = (await res.json()) as any;
     if (json.ok) return { ok: true };
     return { ok: false, error: json.description ?? JSON.stringify(json) };
   } catch (e) {

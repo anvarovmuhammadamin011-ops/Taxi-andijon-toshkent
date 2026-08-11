@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --accent: #F59E0B;
+  --bg: #F5F5F7;
+  --card: #FFFFFF;
+  --text: #1D1D1F;
+  --text-secondary: #86868B;
+  --border: #E5E5E7;
+  --green: #34C759;
+  --red: #FF3B30;
+  --blue: #007AFF;
+}
+
+.dark {
+  --bg: #000000;
+  --card: #1C1C1E;
+  --text: #FFFFFF;
+  --text-secondary: #8E8E93;
+  --border: #38383A;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}

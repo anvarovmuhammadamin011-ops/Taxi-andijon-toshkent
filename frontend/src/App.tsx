@@ -17,40 +17,9 @@ import ChannelFeed from "./pages/ChannelFeed";
 import Vip from "./pages/Vip";
 import Search from "./pages/Search";
 import Notifications from "./pages/Notifications";
-import AdminPanel from "./pages/admin/AdminPanel";
-import Dashboard from "./pages/admin/Dashboard";
-import AdminChannels from "./pages/admin/AdminChannels";
-import AdminUsers from "./pages/admin/AdminUsers";
-import AdminPosts from "./pages/admin/AdminPosts";
-import AdminRevenue from "./pages/admin/AdminRevenue";
-import AdminSettings from "./pages/admin/AdminSettings";
-import AdminVip from "./pages/admin/AdminVip";
-import AdminBot from "./pages/admin/AdminBot";
 import { telegram } from "./lib/telegram";
-import { isAllowedUser } from "./lib/access";
-
-function AccessBlocked() {
-  return (
-    <div className="app-glow mx-auto flex h-full max-w-md flex-col items-center justify-center bg-bg px-6 text-center">
-      <span className="flex h-20 w-20 items-center justify-center rounded-full bg-card-hi text-4xl">
-        🔒
-      </span>
-      <h1 className="mt-5 text-2xl font-extrabold tracking-wide text-ink">
-        RUXSAT <span className="text-primary">YO'Q</span>
-      </h1>
-      <p className="mt-3 text-[15px] leading-relaxed text-text-2">
-        Bu ilova faqat ruxsat etilgan foydalanuvchilar uchun. Ruxsat olish uchun administrator bilan
-        bog'laning — <span className="font-semibold text-ink">@anvarovmuhammadamin</span>
-      </p>
-    </div>
-  );
-}
 
 function Shell() {
-  const user = telegram.getUser();
-  if (!isAllowedUser(user?.id)) {
-    return <AccessBlocked />;
-  }
   return (
     <div className="app-glow mx-auto flex h-full max-w-md flex-col bg-bg">
       <main className="relative flex-1 overflow-hidden">
@@ -67,15 +36,6 @@ function Shell() {
           <Route path="/route/:from/:to" element={<RouteFeed />} />
           <Route path="/channel/:id" element={<ChannelFeed />} />
           <Route path="/vip" element={<Vip />} />
-          <Route path="/admin" element={<AdminPanel />} />
-          <Route path="/admin/dashboard" element={<Dashboard />} />
-          <Route path="/admin/channels" element={<AdminChannels />} />
-          <Route path="/admin/users" element={<AdminUsers />} />
-          <Route path="/admin/posts" element={<AdminPosts />} />
-          <Route path="/admin/vip" element={<AdminVip />} />
-          <Route path="/admin/revenue" element={<AdminRevenue />} />
-          <Route path="/admin/settings" element={<AdminSettings />} />
-          <Route path="/admin/bot" element={<AdminBot />} />
           <Route path="*" element={<Home />} />
         </Routes>
       </main>

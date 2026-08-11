@@ -1,5 +1,4 @@
-import { AppConfig, AppUser, Channel, DashboardStats, DeliveryConfig, DeliveryTarget, DeliveryTask, IncomingResult, Post, RevenueStats, RouteInfo } from "../types";
-import { getAdminToken } from "./adminAuth";
+import { AppConfig, Channel, Post, RouteInfo } from "../types";
 import { telegram } from "./telegram";
 
 export function userIdHeader(): Record<string, string> {
@@ -33,18 +32,6 @@ async function request<T>(
   }
 }
 
-function adminInit(method: string, body?: unknown): RequestInit {
-  const token = getAdminToken();
-  return {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { "x-admin-token": token } : {}),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  };
-}
-
 export const api = {
   posts: (q = "", route = "", since = "") => {
     const params = new URLSearchParams();
@@ -72,10 +59,7 @@ export const api = {
       15000
     ),
   config: async () => {
-    const token = getAdminToken();
-    const headers: Record<string, string> = {};
-    if (token) headers["x-admin-token"] = token;
-    const r = await request<AppConfig>("/api/config", { headers });
+    const r = await request<AppConfig>("/api/config", { headers: userIdHeader() });
     if (r.ok && r.data) return r;
     return {
       ok: false,
@@ -87,48 +71,5 @@ export const api = {
         isAdmin: false,
       },
     };
-  },
-
-  admin: {
-    login: (password: string) =>
-      request<{ token: string }>("/api/admin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      }),
-    logout: () => request<{ ok: boolean }>("/api/admin/logout", adminInit("POST")),
-    dashboard: () => request<DashboardStats>("/api/admin/dashboard", adminInit("GET")),
-    channels: () => request<Channel[]>("/api/admin/channels", adminInit("GET")),
-    addChannel: (title: string, url: string) =>
-      request<Channel>("/api/admin/channels", adminInit("POST", { title, url })),
-    toggleChannel: (id: string, isActive: boolean) =>
-      request<Channel>(`/api/admin/channels/${id}`, adminInit("PATCH", { isActive })),
-    deleteChannel: (id: string) => request<{ ok: boolean }>(`/api/admin/channels/${id}`, adminInit("DELETE")),
-    users: () => request<AppUser[]>("/api/admin/users", adminInit("GET")),
-    blockUser: (id: string, isBlocked: boolean) =>
-      request<AppUser>(`/api/admin/users/${id}`, adminInit("PATCH", { isBlocked })),
-    posts: (q = "") => request<Post[]>(`/api/admin/posts${q ? `?q=${encodeURIComponent(q)}` : ""}`, adminInit("GET")),
-    deletePost: (id: string) => request<{ ok: boolean }>(`/api/admin/posts/${id}`, adminInit("DELETE")),
-    revenue: () => request<RevenueStats>("/api/admin/revenue", adminInit("GET")),
-    keywords: () => request<string[]>("/api/admin/keywords", adminInit("GET")),
-    addKeyword: (keyword: string) => request<string[]>("/api/admin/keywords", adminInit("POST", { keyword })),
-    removeKeyword: (kw: string) => request<string[]>(`/api/admin/keywords/${encodeURIComponent(kw)}`, adminInit("DELETE")),
-    setLimit: (postLimit: number) => request<{ postLimit: number }>("/api/admin/config", adminInit("PATCH", { postLimit })),
-    simulate: () => request<IncomingResult>("/api/admin/simulate", adminInit("POST")),
-    deliveryTargets: () => request<DeliveryTarget[]>("/api/admin/delivery/targets", adminInit("GET")),
-    addDeliveryTarget: (body: { telegramId: number; channelUsername: string; channelTitle?: string; tier: string }) =>
-      request<DeliveryTarget>("/api/admin/delivery/targets", adminInit("POST", body)),
-    updateDeliveryTarget: (id: string, body: Partial<DeliveryTarget>) =>
-      request<DeliveryTarget>(`/api/admin/delivery/targets/${id}`, adminInit("PATCH", body)),
-    deleteDeliveryTarget: (id: string) =>
-      request<{ ok: boolean }>(`/api/admin/delivery/targets/${id}`, adminInit("DELETE")),
-    testDeliveryTarget: (id: string) =>
-      request<{ ok: boolean; error?: string }>(`/api/admin/delivery/targets/${id}/test`, adminInit("POST")),
-    deliveryTasks: () => request<DeliveryTask[]>("/api/admin/delivery/tasks", adminInit("GET")),
-    sendTaskNow: (id: string) => request<DeliveryTask>(`/api/admin/delivery/tasks/${id}/send`, adminInit("PATCH")),
-    clearFinishedTasks: () => request<{ ok: boolean }>("/api/admin/delivery/tasks/finished", adminInit("DELETE")),
-    deliveryConfig: () => request<DeliveryConfig>("/api/admin/delivery/config", adminInit("GET")),
-    setDeliveryConfig: (body: Partial<DeliveryConfig>) =>
-      request<DeliveryConfig>("/api/admin/delivery/config", adminInit("PATCH", body)),
   },
 };

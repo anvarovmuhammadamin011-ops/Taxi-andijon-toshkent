@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { AppConfig, Channel, IncomingResult, Post, RouteInfo, UserProfile } from "../types";
+import { AppConfig, Channel, Post, RouteInfo, UserProfile } from "../types";
 import { api, userIdHeader } from "../lib/api";
 import { telegram } from "../lib/telegram";
 
@@ -27,7 +27,6 @@ interface DataState {
   newPosts: Post[];
   newPostsCount: number;
   showNewPosts: () => void;
-  simulateNewPost: () => Promise<IncomingResult | null>;
   getPost: (id: string) => Post | undefined;
   visiblePosts: Post[];
 }
@@ -159,6 +158,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (usingDemo) return;
       const res = await api.posts("", "", lastSeenRef.current || undefined);
       if (res.ok && res.data.length > 0) {
+        setPosts((prev) => {
+          const seen = new Set(prev.map((p) => p.id));
+          const fresh = res.data.filter((p) => !seen.has(p.id));
+          return [...fresh, ...prev];
+        });
         setNewPosts((prev) => {
           const seen = new Set(prev.map((p) => p.id));
           return [...res.data.filter((p) => !seen.has(p.id)), ...prev].slice(0, 20);
@@ -177,15 +181,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
     setNewPosts([]);
   }, [newPosts]);
-
-  const simulateNewPost = useCallback(async () => {
-    const res = await api.admin.simulate();
-    if (res.ok && res.data) {
-      await refresh();
-      return res.data;
-    }
-    return null;
-  }, [refresh]);
 
   const getPost = useCallback((id: string) => posts.find((p) => p.id === id), [posts]);
 
@@ -207,7 +202,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       newPosts,
       newPostsCount: newPosts.length,
       showNewPosts,
-      simulateNewPost,
       getPost,
       visiblePosts,
     }),
@@ -225,10 +219,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       profile,
       newPosts,
       showNewPosts,
-      simulateNewPost,
       getPost,
       visiblePosts,
-    ]
+    ],
   );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

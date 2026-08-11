@@ -16,8 +16,14 @@ async function kvGet(): Promise<string | null> {
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return null;
-    const j = (await res.json()) as { result: string | null };
-    return j.result;
+    const arrayBuf = await res.arrayBuffer();
+    const text = Buffer.from(arrayBuf).toString('utf8');
+    try {
+      const j = JSON.parse(text) as { result: string | null };
+      return j.result;
+    } catch {
+      return text || null;
+    }
   } catch (e) {
     console.error("KV o'qishda xato:", e);
     return null;
@@ -26,15 +32,33 @@ async function kvGet(): Promise<string | null> {
 
 async function kvSet(value: string): Promise<boolean> {
   try {
+    const buf = Buffer.from(value, 'utf8');
     const res = await fetch(`${KV_URL}/set/${KV_KEY}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${KV_TOKEN}` },
-      body: value,
+      headers: {
+        Authorization: `Bearer ${KV_TOKEN}`,
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Length": buf.length.toString(),
+      },
+      body: buf,
       signal: AbortSignal.timeout(5000),
     });
     return res.ok;
   } catch (e) {
     console.error("KV yozishda xato:", e);
+    return false;
+  }
+}
+
+export async function kvDelete(): Promise<boolean> {
+  try {
+    const res = await fetch(`${KV_URL}/del/${KV_KEY}`, {
+      headers: { Authorization: `Bearer ${KV_TOKEN}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    return res.ok;
+  } catch (e) {
+    console.error("KV o'chirishda xato:", e);
     return false;
   }
 }

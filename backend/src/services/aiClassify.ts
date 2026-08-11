@@ -4,7 +4,7 @@ const CACHE = new Map<string, PostKind>();
 const MAX_CACHE = 2000;
 
 function apiKey(): string {
-  return process.env.DEEPSEEK_API_KEY ?? process.env.AI_API_KEY ?? "";
+  return process.env.AI_API_KEY ?? process.env.DEEPSEEK_API_KEY ?? "";
 }
 
 export function aiEnabled(): boolean {
@@ -37,10 +37,15 @@ export async function classifyWithAI(text: string): Promise<PostKind> {
   const cached = CACHE.get(key);
   if (cached) return cached;
 
+  const regexKind = classifyPostKind(text);
+  if (regexKind !== "other") {
+    cacheSet(key, regexKind);
+    return regexKind;
+  }
+
   if (!aiEnabled()) {
-    const kind = classifyPostKind(text);
-    cacheSet(key, kind);
-    return kind;
+    cacheSet(key, regexKind);
+    return regexKind;
   }
 
   try {
@@ -55,7 +60,7 @@ export async function classifyWithAI(text: string): Promise<PostKind> {
       body: JSON.stringify({
         model: aiModel(),
         temperature: 0,
-        max_tokens: 20,
+        max_tokens: 64,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: text.slice(0, 3000) },
@@ -65,14 +70,14 @@ export async function classifyWithAI(text: string): Promise<PostKind> {
     });
     clearTimeout(timer);
     if (!res.ok) throw new Error(`AI http ${res.status}`);
-    const json = await res.json();
+    const json = (await res.json()) as any;
     const content: string = json?.choices?.[0]?.message?.content ?? "";
     const m = content.match(/"kind"\s*:\s*"(passenger|driver|other)"/);
-    const kind: PostKind = m ? (m[1] as PostKind) : classifyPostKind(text);
+    const kind: PostKind = m ? (m[1] as PostKind) : regexKind;
     cacheSet(key, kind);
     return kind;
   } catch {
-    return classifyPostKind(text);
+    return regexKind;
   }
 }
 

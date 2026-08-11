@@ -8,6 +8,10 @@
     "build": "npm --prefix backend run build && npm --prefix frontend run build",
     "typecheck": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck"
   },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  },
   "devDependencies": {
     "concurrently": "^9.1.0"
   }
