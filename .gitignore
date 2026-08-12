@@ -6,6 +6,12 @@ dist/
 bot/
 backend/.env
 backend/data/
+taxi-v2/backend/.env
+taxi-v2/backend/data/
+taxi-v2/backend/.session.txt
+taxi-v2/backend/.session-code.json
+taxi-v2/backend/.session.json
+
 
 .vercel
 .env*

@@ -3,11 +3,11 @@ import { StringSession } from 'telegram/sessions';
 import { Api } from 'telegram/tl';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { getActiveChannels, updateChannel } from '../services/storage';
+import { getActiveChannels, updateChannel, addChannel, getChannelByChannelId } from '../services/storage';
 import { classifyMessage } from '../services/classifier';
 import { normalizeText, extractPhone, extractUsername, extractPassengerCount, generateFingerprint, detectRoute } from '../utils/text';
 import { addPost, findPostByFingerprint, findPostByPhone } from '../services/storage';
-import { Post } from '../types';
+import { Post, Channel } from '../types';
 
 type NewPostHandler = (post: Post) => void;
 
@@ -52,9 +52,93 @@ class TelegramCollector {
       }
 
       this.setupEventListeners();
+
+      // Auto-discover channels from the configured Telegram folder
+      await this.syncFolderChannels(config.telegram.folder).catch((err) => {
+        logger.error('Failed to sync folder channels:', err);
+      });
     } catch (error) {
       logger.error('Telegram connection failed:', error);
     }
+  }
+
+  /**
+   * Discover all channels inside a Telegram folder (e.g. "taxi") and register
+   * them as active collection channels. Matching is done by the numeric Telegram
+   * channelId so incoming messages from these channels are processed.
+   */
+  async syncFolderChannels(folderName: string): Promise<Channel[]> {
+    if (!this.client || !this.connected) {
+      throw new Error('Telegram client not connected');
+    }
+
+    let filters: any;
+    try {
+      filters = await this.client.invoke(new Api.messages.GetDialogFilters());
+    } catch (error) {
+      logger.error('GetDialogFilters failed:', error);
+      return [];
+    }
+
+    const list = Array.isArray(filters?.filters) ? filters.filters : [];
+    const filter = list.find(
+      (f: any) => f.className === 'DialogFilter' && f.title && f.title.toLowerCase() === folderName.toLowerCase()
+    );
+
+    if (!filter) {
+      logger.warn(`Telegram folder "${folderName}" not found. Available folders: ${list.map((f: any) => f.title).join(', ') || 'none'}`);
+      return [];
+    }
+
+    logger.info(`Syncing channels from Telegram folder "${folderName}" (id=${filter.id})`);
+
+    let dialogs: any[] = [];
+    try {
+      dialogs = await this.client.getDialogs({ folder: filter.id, limit: 200 });
+    } catch (error) {
+      logger.error('getDialogs for folder failed:', error);
+      return [];
+    }
+
+    const discovered: Channel[] = [];
+    for (const dialog of dialogs) {
+      const entity: any = dialog.entity;
+      if (!entity || entity.className !== 'Channel') continue;
+
+      const numericId = entity.id?.toString();
+      if (!numericId) continue;
+
+      const username = entity.username || '';
+      const title = entity.title || username || numericId;
+      const url = username ? `https://t.me/${username}` : `https://t.me/c/${numericId}`;
+
+      const existing = getChannelByChannelId(numericId);
+      if (existing) {
+        updateChannel(existing.id, { title, username, url, status: 'active' });
+        discovered.push({ ...existing, title, username, url, status: 'active' });
+        continue;
+      }
+
+      const channel: Channel = {
+        id: `ch-${numericId}`,
+        channelId: numericId,
+        username,
+        title,
+        url,
+        status: 'active',
+        lastProcessedMessageId: 0,
+        lastEventTime: null,
+        totalCollectedPosts: 0,
+        totalPassengerPosts: 0,
+        totalDriverPosts: 0,
+        addedAt: new Date().toISOString(),
+      };
+      addChannel(channel);
+      discovered.push(channel);
+    }
+
+    logger.info(`Discovered ${discovered.length} channels from folder "${folderName}"`);
+    return discovered;
   }
 
   private setupEventListeners(): void {

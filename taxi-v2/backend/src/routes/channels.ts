@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { authenticateToken, authenticateAdmin } from '../middleware/auth';
 import { getChannels, addChannel, updateChannel, deleteChannel } from '../services/storage';
+import { telegramCollector } from '../services/telegram';
 import { Channel } from '../types';
 
 const router = Router();
@@ -9,6 +10,20 @@ const router = Router();
 router.get('/', (req: Request, res: Response) => {
   const channels = getChannels();
   res.json({ ok: true, data: channels });
+});
+
+// POST /api/channels/sync-folder - Sync channels from a Telegram folder (admin only)
+router.post('/sync-folder', authenticateToken, authenticateAdmin, async (req: Request, res: Response) => {
+  if (!telegramCollector.isConnected()) {
+    return res.status(400).json({ ok: false, error: 'Telegram not connected. Configure TELEGRAM_SESSION first.' });
+  }
+  const folderName = req.body.folder || process.env.TELEGRAM_FOLDER || 'taxi';
+  try {
+    const channels = await telegramCollector.syncFolderChannels(folderName);
+    res.json({ ok: true, data: channels });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 // POST /api/channels - Add new channel (admin only)

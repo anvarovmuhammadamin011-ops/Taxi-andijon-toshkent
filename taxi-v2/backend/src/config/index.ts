@@ -20,6 +20,7 @@ export const config = {
     apiHash: process.env.TELEGRAM_API_HASH || '',
     session: process.env.TELEGRAM_SESSION || '',
     botToken: process.env.BOT_TOKEN || '',
+    folder: process.env.TELEGRAM_FOLDER || 'taxi',
   },
   admin: {
     username: process.env.ADMIN_USERNAME || 'admin',
