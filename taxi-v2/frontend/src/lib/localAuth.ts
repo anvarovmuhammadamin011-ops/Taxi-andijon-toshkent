@@ -34,9 +34,35 @@ function strip(u: LocalUser): User {
   return safe;
 }
 
+function normalizeUser(u: any): LocalUser {
+  const now = new Date();
+  const end = new Date();
+  end.setMonth(end.getMonth() + 1);
+  return {
+    id: u.id || 'u-' + Date.now(),
+    name: u.name || 'User',
+    telegramId: u.telegramId ?? 0,
+    login: u.login || '',
+    role: u.role || 'user',
+    status: u.status || 'active',
+    monthlyPrice: u.monthlyPrice ?? 50000,
+    subscriptionStart: u.subscriptionStart || now.toISOString(),
+    subscriptionEnd: u.subscriptionEnd || end.toISOString(),
+    settings: {
+      darkMode: !!u.settings?.darkMode,
+      notifications: u.settings?.notifications ?? true,
+      defaultRoute: u.settings?.defaultRoute || 'toshkent_andijon',
+      language: u.settings?.language || 'uz',
+    },
+    passwordHash: u.passwordHash || '',
+    updatedAt: u.updatedAt || now.toISOString(),
+  };
+}
+
 function readUsers(): LocalUser[] {
   try {
-    return JSON.parse(localStorage.getItem(USERS_KEY) || '[]') as LocalUser[];
+    const raw = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+    return (Array.isArray(raw) ? raw : []).map(normalizeUser);
   } catch {
     return [];
   }
@@ -48,11 +74,19 @@ function writeUsers(users: LocalUser[]): void {
 
 function seedIfEmpty(): void {
   const users = readUsers();
-  if (users.length > 0) return;
+  if (users.length > 0) {
+    ensureAdmin();
+    return;
+  }
+  const admin = makeAdmin();
+  writeUsers([admin]);
+}
+
+function makeAdmin(): LocalUser {
   const now = new Date();
   const end = new Date();
   end.setMonth(end.getMonth() + 1);
-  const admin: LocalUser = {
+  return {
     id: 'local-admin',
     name: 'Admin',
     telegramId: 0,
@@ -63,10 +97,24 @@ function seedIfEmpty(): void {
     subscriptionStart: now.toISOString(),
     subscriptionEnd: end.toISOString(),
     settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
-    passwordHash: hashPassword('admin123'),
+    passwordHash: hashPassword('admin'),
     updatedAt: now.toISOString(),
   };
-  writeUsers([admin]);
+}
+
+function ensureAdmin(): void {
+  const users = readUsers();
+  const idx = users.findIndex((u) => u.login === 'admin');
+  const correct = hashPassword('admin');
+  if (idx === -1) {
+    writeUsers([...users, makeAdmin()]);
+    return;
+  }
+  const admin = users[idx];
+  if (admin.passwordHash !== correct) {
+    admin.passwordHash = correct;
+    writeUsers(users);
+  }
 }
 
 export function registerUser(name: string, login: string, password: string): { ok: boolean; error?: string } {
@@ -163,6 +211,68 @@ export function deleteUser(userId: string): void {
   const notif = readNotif();
   delete notif[userId];
   writeNotif(notif);
+}
+
+export interface AddUserInput {
+  name: string;
+  telegramId: number;
+  login: string;
+  password: string;
+  monthlyPrice: number;
+  subscriptionMonths: number;
+}
+
+export function addUserByAdmin(input: AddUserInput): { ok: boolean; error?: string } {
+  const users = readUsers();
+  if (users.find((u) => u.login === input.login)) return { ok: false, error: 'Bu login band' };
+  const now = new Date();
+  const end = new Date();
+  end.setMonth(end.getMonth() + (input.subscriptionMonths || 1));
+  const user: LocalUser = {
+    id: 'u-' + Date.now(),
+    name: input.name,
+    login: input.login,
+    telegramId: input.telegramId || 0,
+    role: 'user',
+    status: 'active',
+    monthlyPrice: input.monthlyPrice || 50000,
+    subscriptionStart: now.toISOString(),
+    subscriptionEnd: end.toISOString(),
+    settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
+    passwordHash: hashPassword(input.password || '123456'),
+    updatedAt: now.toISOString(),
+  };
+  users.push(user);
+  writeUsers(users);
+  return { ok: true };
+}
+
+export interface UpdateUserAdminInput {
+  name?: string;
+  login?: string;
+  telegramId?: number;
+  monthlyPrice?: number;
+  subscriptionEnd?: string;
+  password?: string;
+  status?: string;
+}
+
+export function updateUserAdmin(userId: string, patch: UpdateUserAdminInput): User | null {
+  const users = readUsers();
+  const idx = users.findIndex((x) => x.id === userId);
+  if (idx === -1) return null;
+  const u = users[idx];
+  if (patch.name !== undefined) u.name = patch.name;
+  if (patch.login !== undefined) u.login = patch.login;
+  if (patch.telegramId !== undefined) u.telegramId = patch.telegramId;
+  if (patch.monthlyPrice !== undefined) u.monthlyPrice = patch.monthlyPrice;
+  if (patch.subscriptionEnd !== undefined) u.subscriptionEnd = patch.subscriptionEnd;
+  if (patch.status !== undefined) u.status = patch.status as User['status'];
+  if (patch.password !== undefined && patch.password) u.passwordHash = hashPassword(patch.password);
+  u.updatedAt = new Date().toISOString();
+  users[idx] = u;
+  writeUsers(users);
+  return strip(u);
 }
 
 export function getAllUsers(): User[] {

@@ -4,7 +4,9 @@
   "private": true,
   "description": "Taxi Collector v2 — Toshkent ↔ Andijon taxi e'lonlari kollektori",
   "scripts": {
-    "dev": "concurrently -n backend,frontend -c yellow,cyan \"npm --prefix taxi-v2/backend run dev\" \"npm --prefix taxi-v2/frontend run dev\"",
+    "dev": "npm --prefix taxi-v2/frontend run dev",
+    "dev:backend": "npm --prefix taxi-v2/backend run dev",
+    "dev:all": "concurrently -n backend,frontend -c yellow,cyan \"npm --prefix taxi-v2/backend run dev\" \"npm --prefix taxi-v2/frontend run dev\"",
     "build": "npm --prefix taxi-v2/backend run build && npm --prefix taxi-v2/frontend run build",
     "typecheck": "npm --prefix taxi-v2/backend run typecheck && npm --prefix taxi-v2/frontend run typecheck"
   },

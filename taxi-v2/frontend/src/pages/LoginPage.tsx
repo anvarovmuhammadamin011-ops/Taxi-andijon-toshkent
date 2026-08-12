@@ -14,18 +14,38 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    doLogin(login, password);
+  };
+
+  const doLogin = async (lg: string, pw: string) => {
     setError('');
     setLoading(true);
-
     const result = mode === 'login'
-      ? await authLogin(login, password)
-      : await authRegister(name, login, password);
+      ? await authLogin(lg, pw)
+      : await authRegister(name, lg, pw);
     setLoading(false);
-
     if (result.ok) {
-      navigate('/');
+      navigate(result.user?.role === 'admin' ? '/admin' : '/');
     } else {
       setError(result.error || (mode === 'login' ? "Login yoki parol noto'g'ri" : "Ro'yxatdan o'tishda xatolik"));
+    }
+  };
+
+  const quickAdmin = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const res = await authLogin('admin', 'admin');
+      if (res.ok) {
+        navigate(res.user?.role === 'admin' ? '/admin' : '/');
+      } else {
+        setError('Admin kirishda xatolik: ' + (res.error || ''));
+      }
+    } catch (e: any) {
+      console.error('quickAdmin error', e);
+      setError('Xatolik: ' + (e?.message || e));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -101,6 +121,14 @@ export default function LoginPage() {
         >
           {mode === 'login' ? "Akkaunt yo'qmi? Ro'yxatdan o'ting" : 'Akkauntingiz bormi? Kirish'}
         </button>
+
+        <button
+          onClick={quickAdmin}
+          className="w-full mt-4 flex items-center justify-center gap-2 bg-[var(--accent)] text-white font-semibold py-3 rounded-xl"
+        >
+          👨‍💼 Admin panelga kirish (tez)
+        </button>
+        <p className="text-center text-xs text-[var(--text-secondary)] mt-2">login: admin · parol: admin</p>
       </div>
     </div>
   );

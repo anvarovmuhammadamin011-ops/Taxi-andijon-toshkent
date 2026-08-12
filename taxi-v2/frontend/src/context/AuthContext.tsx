@@ -5,8 +5,8 @@ import * as localAuth from '../lib/localAuth';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (login: string, password: string) => Promise<{ ok: boolean; error?: string }>;
-  register: (name: string, login: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  login: (login: string, password: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
+  register: (name: string, login: string, password: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
   logout: () => void;
   updateSettings: (s: Partial<UserSettings>) => void;
   savedPosts: Post[];
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const nf = localAuth.getNotifications(u.id);
       setNotifications(nf);
       setUnreadNotifications(nf.filter((n) => !n.read).length);
-      applyDarkMode(u.settings.darkMode);
+      applyDarkMode(u?.settings?.darkMode ?? false);
     } else {
       setSavedPosts([]);
       setSavedIds([]);
@@ -85,9 +85,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = localAuth.loginUser(login, password);
     if (res.ok && res.user) {
       setUser(res.user);
-      applyDarkMode(res.user.settings.darkMode);
+      applyDarkMode(res.user?.settings?.darkMode ?? false);
       refreshLocal();
-      return { ok: true };
+      return { ok: true, user: res.user };
     }
     return { ok: false, error: res.error };
   };

@@ -53,6 +53,7 @@ interface PostsContextType {
   newPost: Post | null;
   botConfigured: boolean;
   removePost: (id: string) => void;
+  setPosts: (posts: Post[]) => void;
   refresh: () => void;
 }
 
@@ -61,6 +62,7 @@ const PostsContext = createContext<PostsContextType>({
   newPost: null,
   botConfigured: false,
   removePost: () => {},
+  setPosts: () => {},
   refresh: () => {},
 });
 
@@ -109,10 +111,16 @@ export function PostsProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const setPostsExternal = (next: Post[]) => {
+    const sliced = next.slice(0, 200);
+    writePosts(sliced);
+    setPosts(sliced);
+  };
+
   const refresh = () => setPosts(readPosts());
 
   return (
-    <PostsContext.Provider value={{ posts, newPost, botConfigured, removePost, refresh }}>
+    <PostsContext.Provider value={{ posts, newPost, botConfigured, removePost, setPosts: setPostsExternal, refresh }}>
       {children}
     </PostsContext.Provider>
   );

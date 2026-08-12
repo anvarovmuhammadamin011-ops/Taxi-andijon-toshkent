@@ -52,7 +52,7 @@ export interface UserNotification {
 }
 
 export interface RouteInfo {
-  id: RouteId;
+  id: string;
   label: string;
   icon: string;
 }
