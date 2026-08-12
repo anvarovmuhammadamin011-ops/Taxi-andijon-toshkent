@@ -7,6 +7,7 @@ export interface Post {
   channelTitle: string;
   channelUrl: string;
   originalText: string;
+  normalizedText: string;
   route: RouteId;
   passengerCount: number | null;
   phone: string | null;
@@ -14,6 +15,7 @@ export interface Post {
   classification: string;
   confidence: number;
   isDuplicate: boolean;
+  duplicateFingerprint: string;
   messageDate: string;
   collectedAt: string;
 }

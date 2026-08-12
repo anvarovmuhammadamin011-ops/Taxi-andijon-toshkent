@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { PostsProvider } from './context/PostsContext';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
 import RoutesPage from './pages/RoutesPage';
@@ -68,7 +69,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <PostsProvider>
+          <AppRoutes />
+        </PostsProvider>
       </AuthProvider>
     </BrowserRouter>
   );
