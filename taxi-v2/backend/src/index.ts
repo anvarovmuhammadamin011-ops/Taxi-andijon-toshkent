@@ -30,7 +30,7 @@ async function main() {
 
   // Middleware
   app.use(helmet());
-  app.use(cors({ origin: config.server.frontendUrl, credentials: true }));
+  app.use(cors({ origin: config.server.frontendUrls, credentials: true }));
   app.use(express.json({ limit: '10kb' }));
 
   // Rate limiting

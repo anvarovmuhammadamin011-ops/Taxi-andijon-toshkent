@@ -11,7 +11,7 @@ class SocketService {
   initialize(server: HttpServer): void {
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: config.server.frontendUrl,
+        origin: config.server.frontendUrls,
         methods: ['GET', 'POST'],
       },
     });

@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: taxi-collector
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ALLOW_BROWSER_LOGIN
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
