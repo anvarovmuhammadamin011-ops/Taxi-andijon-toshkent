@@ -3,6 +3,7 @@ import { Server as HttpServer } from 'http';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { Post } from '../types';
+import { getUsers, getUserById, addNotification } from './storage';
 
 class SocketService {
   private io: SocketIOServer | null = null;
@@ -25,10 +26,29 @@ class SocketService {
     logger.info('Socket.IO initialized');
   }
 
-  // Broadcast new post to all connected clients
+  // Broadcast new post to all connected clients and create notifications
   broadcastNewPost(post: Post): void {
     if (!this.io) return;
     this.io.emit('new-post', post);
+
+    // Create in-app notifications for users whose defaultRoute matches
+    if (post.classification === 'passenger' && !post.isDuplicate) {
+      for (const user of getUsers()) {
+        const settings = user.settings;
+        if (settings && settings.notifications !== false && settings.defaultRoute === post.route) {
+          addNotification({
+            id: Date.now().toString() + Math.random().toString(36).slice(2, 8),
+            userId: user.id,
+            postId: post.id,
+            route: post.route,
+            passengerCount: post.passengerCount,
+            text: post.originalText.slice(0, 150),
+            read: false,
+            createdAt: new Date().toISOString(),
+          });
+        }
+      }
+    }
   }
 
   // Broadcast post removal

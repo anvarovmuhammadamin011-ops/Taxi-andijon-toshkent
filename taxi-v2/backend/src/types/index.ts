@@ -4,6 +4,14 @@ export type UserRole = 'user' | 'admin';
 export type UserStatus = 'active' | 'blocked' | 'expired';
 export type ChannelStatus = 'active' | 'inactive';
 export type SubscriptionStatus = 'active' | 'expired';
+export type Language = 'uz' | 'ru';
+
+export interface UserSettings {
+  darkMode: boolean;
+  notifications: boolean;
+  defaultRoute: Route;
+  language: Language;
+}
 
 export interface Post {
   id: string;
@@ -36,8 +44,26 @@ export interface User {
   monthlyPrice: number;
   subscriptionStart: string;
   subscriptionEnd: string;
+  settings?: UserSettings;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface UserNotification {
+  id: string;
+  userId: string;
+  postId: string;
+  route: Route;
+  passengerCount: number | null;
+  text: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface SavedPost {
+  userId: string;
+  postId: string;
+  savedAt: string;
 }
 
 export interface Channel {

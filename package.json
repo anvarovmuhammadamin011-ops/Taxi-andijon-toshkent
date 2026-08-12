@@ -2,15 +2,11 @@
   "name": "taxi-collector",
   "version": "1.0.0",
   "private": true,
-  "description": "Taxi Collector — Toshkent ↔ Andijon taxi e'lonlari kollektori",
+  "description": "Taxi Collector v2 — Toshkent ↔ Andijon taxi e'lonlari kollektori",
   "scripts": {
-    "dev": "concurrently -n backend,frontend -c yellow,cyan \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
-    "build": "npm --prefix backend run build && npm --prefix frontend run build",
-    "typecheck": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.21.2"
+    "dev": "concurrently -n backend,frontend -c yellow,cyan \"npm --prefix taxi-v2/backend run dev\" \"npm --prefix taxi-v2/frontend run dev\"",
+    "build": "npm --prefix taxi-v2/backend run build && npm --prefix taxi-v2/frontend run build",
+    "typecheck": "npm --prefix taxi-v2/backend run typecheck && npm --prefix taxi-v2/frontend run typecheck"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

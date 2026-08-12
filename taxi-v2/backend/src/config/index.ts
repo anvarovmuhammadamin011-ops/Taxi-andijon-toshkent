@@ -6,6 +6,8 @@ export const config = {
     port: parseInt(process.env.PORT || '3001'),
     env: process.env.NODE_ENV || 'development',
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+    // Allow login without Telegram initData (preview/demo mode). NEVER enable in production.
+    allowBrowserLogin: process.env.ALLOW_BROWSER_LOGIN === 'true',
     jwtSecret: process.env.JWT_SECRET || 'taxi-collector-secret-key-change-in-production',
     jwtExpiresIn: '30d',
   },

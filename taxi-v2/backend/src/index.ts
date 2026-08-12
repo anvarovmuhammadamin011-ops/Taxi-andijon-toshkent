@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
+import path from 'path';
+import fs from 'fs';
 import { config, validateConfig } from './config';
 import { logger } from './utils/logger';
 import { loadAll } from './services/storage';
@@ -10,7 +12,10 @@ import { telegramCollector } from './services/telegram';
 import { socketService } from './services/socket';
 import { authRouter } from './routes/auth';
 import { postsRouter } from './routes/posts';
+import { channelsRouter } from './routes/channels';
 import { adminRouter } from './routes/admin';
+import { meRouter } from './routes/me';
+import { routesRouter } from './routes/routes';
 
 async function main() {
   logger.info('Starting Taxi Collector v2...');
@@ -38,12 +43,30 @@ async function main() {
   // Routes
   app.use('/api/auth', authRouter);
   app.use('/api/posts', postsRouter);
+  app.use('/api/channels', channelsRouter);
   app.use('/api/admin', adminRouter);
+  app.use('/api/me', meRouter);
+  app.use('/api/routes', routesRouter);
 
   // Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', telegram: telegramCollector.isConnected() });
   });
+
+  // Serve built frontend (single-service deploy)
+  const frontendDist = path.resolve(__dirname, '../../frontend/dist');
+  const frontendIndex = path.join(frontendDist, 'index.html');
+  if (fs.existsSync(frontendIndex)) {
+    app.use(express.static(frontendDist));
+    // SPA fallback - all non-API routes go to index.html
+    app.use((req, res, next) => {
+      if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return next();
+      res.sendFile(frontendIndex);
+    });
+    logger.info(`Serving frontend from ${frontendDist}`);
+  } else {
+    logger.warn('Frontend dist not found - API-only mode');
+  }
 
   // Connect to Telegram
   await telegramCollector.connect();

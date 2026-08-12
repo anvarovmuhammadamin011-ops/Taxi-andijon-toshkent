@@ -50,6 +50,7 @@ export default function LoginPage() {
                 type="text"
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
+                autoComplete="username"
                 className="w-full px-4 py-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
                 placeholder="Login kiriting"
               />
@@ -61,6 +62,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
                 className="w-full px-4 py-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
                 placeholder="Parol kiriting"
               />

@@ -12,23 +12,33 @@ router.post('/login', async (req: Request, res: Response) => {
   try {
     const { login, password, initData } = req.body;
 
-    if (!login || !password || !initData) {
-      return res.status(400).json({ ok: false, error: 'Login, password and initData required' });
+    if (!login || !password) {
+      return res.status(400).json({ ok: false, error: 'Login and password required' });
     }
 
-    // Validate Telegram initData server-side
-    const telegramAuth = validateTelegramInitData(initData);
-    if (!telegramAuth.isValid || !telegramAuth.userId) {
-      return res.status(401).json({ ok: false, error: 'Invalid Telegram data' });
+    // Validate Telegram initData server-side (browser login bypass for preview mode)
+    const browserLogin = config.server.allowBrowserLogin && (!initData || initData === '');
+    let telegramAuth: { isValid: boolean; userId: number | null; username: string | null } | null = null;
+
+    if (browserLogin) {
+      telegramAuth = { isValid: true, userId: null, username: null };
+    } else {
+      if (!initData) {
+        return res.status(400).json({ ok: false, error: 'Login, password and initData required' });
+      }
+      telegramAuth = validateTelegramInitData(initData);
+      if (!telegramAuth.isValid || !telegramAuth.userId) {
+        return res.status(401).json({ ok: false, error: 'Invalid Telegram data' });
+      }
     }
 
     // Check admin login
     if (login === config.admin.username && password === config.admin.password) {
-      const token = generateToken({ userId: 'admin', telegramId: telegramAuth.userId, role: 'admin' });
+      const token = generateToken({ userId: 'admin', telegramId: telegramAuth.userId || 0, role: 'admin' });
       return res.json({
         ok: true,
         token,
-        user: { id: 'admin', name: 'Admin', role: 'admin', telegramId: telegramAuth.userId },
+        user: { id: 'admin', name: 'Admin', role: 'admin', telegramId: telegramAuth.userId || 0 },
       });
     }
 
@@ -44,8 +54,8 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ ok: false, error: 'Login yoki parol noto\'g\'ri' });
     }
 
-    // Verify Telegram ID matches
-    if (user.telegramId !== telegramAuth.userId) {
+    // Verify Telegram ID matches (skipped in browser login preview mode)
+    if (!browserLogin && telegramAuth!.userId && user.telegramId !== telegramAuth!.userId) {
       return res.status(403).json({ ok: false, error: 'Kirish taqiqlangan' });
     }
 

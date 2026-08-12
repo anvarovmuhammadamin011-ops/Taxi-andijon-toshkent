@@ -19,6 +19,13 @@ class TelegramCollector {
   async connect(): Promise<void> {
     if (this.connected) return;
 
+    // Skip if no session configured
+    if (!config.telegram.session) {
+      logger.warn('Telegram session not configured. Skipping Telegram connection.');
+      logger.warn('Run: npx ts-node login.ts to generate a session');
+      return;
+    }
+
     try {
       const session = new StringSession(config.telegram.session);
       this.client = new TelegramClient(session, config.telegram.apiId, config.telegram.apiHash, {

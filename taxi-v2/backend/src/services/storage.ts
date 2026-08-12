@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { config } from '../config';
-import { Post, User, Channel, Settings } from '../types';
+import { Post, User, Channel, Settings, UserNotification, SavedPost } from '../types';
 import { logger } from '../utils/logger';
 
 // JSON File Storage - No MongoDB needed
@@ -14,6 +14,8 @@ interface DataStore {
   users: User[];
   channels: Channel[];
   settings: Settings;
+  notifications: UserNotification[];
+  savedPosts: SavedPost[];
 }
 
 let store: DataStore = {
@@ -25,6 +27,8 @@ let store: DataStore = {
     maxPosts: config.storage.maxPosts,
     classifierThreshold: 0.6,
   },
+  notifications: [],
+  savedPosts: [],
 };
 
 function getFilePath(filename: string): string {
@@ -66,7 +70,10 @@ export function loadAll(): void {
   store.users = loadFile<User[]>('users.json', []);
   store.channels = loadFile<Channel[]>('channels.json', []);
   store.settings = loadFile<Settings>('settings.json', store.settings);
+  store.notifications = loadFile<UserNotification[]>('notifications.json', []);
+  store.savedPosts = loadFile<SavedPost[]>('saved.json', []);
   logger.info(`Loaded ${store.posts.length} posts, ${store.users.length} users, ${store.channels.length} channels`);
+  seedIfEmpty();
 }
 
 export function saveAll(): void {
@@ -74,6 +81,82 @@ export function saveAll(): void {
   saveFile('users.json', store.users);
   saveFile('channels.json', store.channels);
   saveFile('settings.json', store.settings);
+  saveFile('notifications.json', store.notifications);
+  saveFile('saved.json', store.savedPosts);
+}
+
+// Seed default data on first run (empty storage)
+function seedIfEmpty(): void {
+  if (store.users.length > 0 || store.channels.length > 0) return;
+
+  const now = new Date();
+  const endDate = new Date();
+  endDate.setMonth(endDate.getMonth() + 1);
+
+  addChannel({
+    id: 'ch-taxsislar',
+    channelId: 'taxsislar',
+    username: 'taxsislar',
+    title: 'Taksilar',
+    url: 'https://t.me/taxsislar',
+    status: 'active',
+    lastProcessedMessageId: 0,
+    lastEventTime: null,
+    totalCollectedPosts: 0,
+    totalPassengerPosts: 0,
+    totalDriverPosts: 0,
+    addedAt: now.toISOString(),
+  });
+
+  addUser({
+    id: 'test-user-1',
+    name: 'Test User',
+    telegramId: 8877452838,
+    login: 'test',
+    passwordHash: '$2a$10$NcKplwoOyjhHtf..5CwZ.uf/C8ekw9zQV1zdmevhdiHg135jApmHO',
+    role: 'user',
+    status: 'active',
+    monthlyPrice: 50000,
+    subscriptionStart: now.toISOString(),
+    subscriptionEnd: endDate.toISOString(),
+    settings: {
+      darkMode: false,
+      notifications: true,
+      defaultRoute: 'toshkent_andijon',
+      language: 'uz',
+    },
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+  });
+
+  const testTexts = [
+    { text: 'Тошкентга юрамиз 2та кам машина kerak', route: 'toshkent_andijon' as const, phone: '998218408' },
+    { text: 'Andijonga ketmoqchiman, 3 kishi, mashina kerak', route: 'andijon_toshkent' as const, phone: '901234567' },
+    { text: 'Тошкентдан Баликчига юрамиз 2 та одамимиз кам', route: 'toshkent_andijon' as const, phone: '998765432' },
+  ];
+  testTexts.forEach((p, i) => {
+    addPost({
+      id: `test-post-${Date.now()}-${i}`,
+      messageId: 1000 + i,
+      channelId: 'taxsislar',
+      channelTitle: 'Taksilar',
+      channelUrl: 'https://t.me/taxsislar',
+      originalText: p.text,
+      normalizedText: p.text.toLowerCase(),
+      route: p.route,
+      passengerCount: 2,
+      phone: p.phone,
+      username: null,
+      classification: 'passenger',
+      confidence: 0.9,
+      duplicateFingerprint: p.text.slice(0, 20),
+      isDuplicate: false,
+      messageDate: now.toISOString(),
+      collectedAt: now.toISOString(),
+    });
+  });
+
+  logger.info('Seeded default test user (test / test123), channel and sample posts');
 }
 
 // Post operations
@@ -182,4 +265,63 @@ export function updateSettings(updates: Partial<Settings>): Settings {
   store.settings = { ...store.settings, ...updates };
   saveFile('settings.json', store.settings);
   return store.settings;
+}
+
+// Saved posts operations
+export function getSavedPostIds(userId: string): string[] {
+  return store.savedPosts
+    .filter((s) => s.userId === userId)
+    .sort((a, b) => b.savedAt.localeCompare(a.savedAt))
+    .map((s) => s.postId);
+}
+
+export function isPostSaved(userId: string, postId: string): boolean {
+  return store.savedPosts.some((s) => s.userId === userId && s.postId === postId);
+}
+
+export function toggleSavedPost(userId: string, postId: string): { saved: boolean } {
+  const existing = store.savedPosts.find((s) => s.userId === userId && s.postId === postId);
+  if (existing) {
+    store.savedPosts = store.savedPosts.filter((s) => s !== existing);
+    saveFile('saved.json', store.savedPosts);
+    return { saved: false };
+  }
+  store.savedPosts.push({ userId, postId, savedAt: new Date().toISOString() });
+  saveFile('saved.json', store.savedPosts);
+  return { saved: true };
+}
+
+// Notifications operations
+export function getNotifications(userId: string): UserNotification[] {
+  return store.notifications
+    .filter((n) => n.userId === userId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function getUnreadNotificationCount(userId: string): number {
+  return store.notifications.filter((n) => n.userId === userId && !n.read).length;
+}
+
+export function addNotification(notification: UserNotification): void {
+  store.notifications.push(notification);
+  // Keep max 100 notifications per user
+  const userNotifs = store.notifications.filter((n) => n.userId === notification.userId);
+  if (userNotifs.length > 100) {
+    const excess = userNotifs.length - 100;
+    const removalIds = new Set(userNotifs.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(0, excess).map((n) => n.id));
+    store.notifications = store.notifications.filter((n) => !removalIds.has(n.id));
+  }
+  saveFile('notifications.json', store.notifications);
+}
+
+export function markNotificationsRead(userId: string): void {
+  store.notifications = store.notifications.map((n) =>
+    n.userId === userId ? { ...n, read: true } : n
+  );
+  saveFile('notifications.json', store.notifications);
+}
+
+export function clearNotifications(userId: string): void {
+  store.notifications = store.notifications.filter((n) => n.userId !== userId);
+  saveFile('notifications.json', store.notifications);
 }

@@ -1,16 +1,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { Post } from '../lib/types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-interface SocketEvent {
-  type: string;
-  data: any;
-}
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 export function useSocket() {
   const [connected, setConnected] = useState(false);
-  const [lastEvent, setLastEvent] = useState<SocketEvent | null>(null);
+  const [newPost, setNewPost] = useState<Post | null>(null);
+  const [removedPostId, setRemovedPostId] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -30,12 +27,12 @@ export function useSocket() {
       setConnected(false);
     });
 
-    socket.on('new-post', (data: any) => {
-      setLastEvent({ type: 'new-post', data });
+    socket.on('new-post', (data: Post) => {
+      setNewPost(data);
     });
 
-    socket.on('remove-post', (data: any) => {
-      setLastEvent({ type: 'remove-post', data });
+    socket.on('remove-post', (data: string) => {
+      setRemovedPostId(data);
     });
 
     return () => {
@@ -43,5 +40,5 @@ export function useSocket() {
     };
   }, []);
 
-  return { connected, lastEvent };
+  return { connected, newPost, removedPostId };
 }

@@ -1,0 +1,13 @@
+node_modules
+.git
+.vercel
+.vscode
+*.log
+.env
+.env.local
+Dockerfile
+.railway
+taxi-v2/backend/data
+Public
+bot
+dist
