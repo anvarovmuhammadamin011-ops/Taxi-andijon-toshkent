@@ -6,7 +6,7 @@ import { Post, routeLabel } from '../lib/types';
 import PostCard from '../components/PostCard';
 
 export default function HomePage() {
-  const { user } = useAuth();
+  const { user, pushNotification } = useAuth();
   const { connected, newPost, removedPostId } = useSocket();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +50,7 @@ export default function HomePage() {
       setNewPostFlash(true);
       if (flashTimer.current) clearTimeout(flashTimer.current);
       flashTimer.current = setTimeout(() => setNewPostFlash(false), 3000);
+      pushNotification(newPost);
     }
   }, [newPost, channels]);
 

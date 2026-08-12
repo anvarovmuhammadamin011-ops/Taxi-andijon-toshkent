@@ -1,43 +1,41 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { api } from '../lib/api';
 import { User, Post, UserSettings, UserNotification } from '../lib/types';
-
-interface MeData {
-  user: User;
-  savedPosts: Post[];
-  savedCount: number;
-  notifications: UserNotification[];
-  unreadNotifications: number;
-}
+import * as localAuth from '../lib/localAuth';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (login: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  register: (name: string, login: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
-  updateSettings: (s: Partial<UserSettings>) => Promise<void>;
+  updateSettings: (s: Partial<UserSettings>) => void;
   savedPosts: Post[];
   savedIds: string[];
-  toggleSaved: (postId: string) => Promise<void>;
+  toggleSaved: (post: Post) => void;
   notifications: UserNotification[];
   unreadNotifications: number;
-  markNotificationsRead: () => Promise<void>;
-  refreshMe: () => Promise<void>;
+  markNotificationsRead: () => void;
+  pushNotification: (post: Post) => void;
+  refreshMe: () => void;
+  allUsers: User[];
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   login: async () => ({ ok: false }),
+  register: async () => ({ ok: false }),
   logout: () => {},
-  updateSettings: async () => {},
+  updateSettings: () => {},
   savedPosts: [],
   savedIds: [],
-  toggleSaved: async () => {},
+  toggleSaved: () => {},
   notifications: [],
   unreadNotifications: 0,
-  markNotificationsRead: async () => {},
-  refreshMe: async () => {},
+  markNotificationsRead: () => {},
+  pushNotification: () => {},
+  refreshMe: () => {},
+  allUsers: [],
 });
 
 export function useAuth() {
@@ -51,97 +49,109 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
 
   const applyDarkMode = (dark: boolean) => {
     document.documentElement.classList.toggle('dark', dark);
   };
 
-  const refreshMe = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    const res = await api<MeData>('/api/me');
-    if (res.ok) {
-      setUser(res.data.user);
-      setSavedPosts(res.data.savedPosts);
-      setSavedIds(res.data.savedPosts.map((p) => p.id));
-      setNotifications(res.data.notifications);
-      setUnreadNotifications(res.data.unreadNotifications);
-      applyDarkMode(res.data.user.settings.darkMode);
+  const refreshLocal = () => {
+    const u = localAuth.getCurrentUser();
+    setUser(u);
+    setAllUsers(localAuth.getAllUsers());
+    if (u) {
+      const sp = localAuth.getSavedPosts(u.id);
+      setSavedPosts(sp);
+      setSavedIds(sp.map((p) => p.id));
+      const nf = localAuth.getNotifications(u.id);
+      setNotifications(nf);
+      setUnreadNotifications(nf.filter((n) => !n.read).length);
+      applyDarkMode(u.settings.darkMode);
+    } else {
+      setSavedPosts([]);
+      setSavedIds([]);
+      setNotifications([]);
+      setUnreadNotifications(0);
     }
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const savedUser = localStorage.getItem('user');
-    if (token && savedUser) {
-      setUser(JSON.parse(savedUser));
-      applyDarkMode(JSON.parse(savedUser).settings?.darkMode || false);
-      refreshMe();
-    }
+    refreshLocal();
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = async (login: string, password: string) => {
-    try {
-      const res = await api<{ token: string; user: User }>('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ login, password }),
-      });
-
-      if (res.ok) {
-        localStorage.setItem('token', res.data.token);
-        localStorage.setItem('user', JSON.stringify(res.data.user));
-        setUser(res.data.user);
-        applyDarkMode(res.data.user.settings?.darkMode || false);
-        return { ok: true };
-      }
-
-      return { ok: false, error: res.error };
-    } catch (error) {
-      return { ok: false, error: 'Server error' };
+    const res = localAuth.loginUser(login, password);
+    if (res.ok && res.user) {
+      setUser(res.user);
+      applyDarkMode(res.user.settings.darkMode);
+      refreshLocal();
+      return { ok: true };
     }
+    return { ok: false, error: res.error };
+  };
+
+  const register = async (name: string, loginValue: string, password: string) => {
+    const res = localAuth.registerUser(name, loginValue, password);
+    if (!res.ok) return { ok: false, error: res.error };
+    return login(loginValue, password);
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    localAuth.logoutUser();
     setUser(null);
     setSavedPosts([]);
     setSavedIds([]);
     setNotifications([]);
     setUnreadNotifications(0);
+    setAllUsers(localAuth.getAllUsers());
     applyDarkMode(false);
   };
 
-  const updateSettings = async (s: Partial<UserSettings>) => {
-    const res = await api<{ settings: UserSettings }>('/api/me/settings', {
-      method: 'PATCH',
-      body: JSON.stringify(s),
-    });
-    if (res.ok && user) {
-      const next = { ...user, settings: res.data.settings };
-      setUser(next);
-      localStorage.setItem('user', JSON.stringify(next));
-      applyDarkMode(res.data.settings.darkMode);
+  const updateSettings = (s: Partial<UserSettings>) => {
+    if (!user) return;
+    const updated = localAuth.updateUserSettings(user.id, s);
+    if (updated) {
+      setUser(updated);
+      applyDarkMode(updated.settings.darkMode);
     }
   };
 
-  const toggleSaved = async (postId: string) => {
-    const res = await api<{ saved: boolean }>(`/api/me/saved/${postId}/toggle`, {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-    if (res.ok) {
-      setSavedIds((prev) => (res.data.saved ? [...prev, postId] : prev.filter((id) => id !== postId)));
-      await refreshMe();
-    }
+  const toggleSaved = (post: Post) => {
+    if (!user) return;
+    const { posts, saved } = localAuth.toggleSavedPost(user.id, post);
+    setSavedPosts(posts);
+    setSavedIds(posts.map((p) => p.id));
+    void saved;
   };
 
-  const markNotificationsRead = async () => {
-    await api('/api/me/notifications/read', { method: 'POST', body: JSON.stringify({}) });
+  const markNotificationsRead = () => {
+    if (!user) return;
+    const nf = localAuth.markNotificationsRead(user.id);
+    setNotifications(nf);
     setUnreadNotifications(0);
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
+  const pushNotification = (post: Post) => {
+    if (!user || !user.settings.notifications) return;
+    const notif: UserNotification = {
+      id: 'n-' + post.id,
+      userId: user.id,
+      postId: post.id,
+      route: post.route as UserNotification['route'],
+      passengerCount: post.passengerCount,
+      text: post.originalText,
+      read: false,
+      createdAt: new Date().toISOString(),
+    };
+    const nf = localAuth.addNotification(user.id, notif);
+    setNotifications(nf);
+    setUnreadNotifications(nf.filter((n) => !n.read).length);
+  };
+
+  const refreshMe = () => {
+    refreshLocal();
   };
 
   return (
@@ -150,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         login,
+        register,
         logout,
         updateSettings,
         savedPosts,
@@ -158,7 +169,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         notifications,
         unreadNotifications,
         markNotificationsRead,
+        pushNotification,
         refreshMe,
+        allUsers,
       }}
     >
       {children}

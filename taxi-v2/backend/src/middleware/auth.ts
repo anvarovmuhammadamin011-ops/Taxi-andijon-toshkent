@@ -42,3 +42,17 @@ export function authenticateAdmin(req: Request, res: Response, next: NextFunctio
   }
   next();
 }
+
+// Middleware to protect owner-only endpoints (channel sync / management) with a
+// shared admin key. The key is ADMIN_API_KEY on the server; the frontend sends it
+// via VITE_ADMIN_API_KEY. Keeping auth on the frontend means there is no backend
+// user session, so we use a simple shared secret instead of JWT admin.
+export function requireAdminKey(req: Request, res: Response, next: NextFunction): void {
+  const key = req.header('x-admin-key');
+  const expected = process.env.ADMIN_API_KEY || 'taxi-admin';
+  if (!key || key !== expected) {
+    res.status(401).json({ ok: false, error: 'Admin key required' });
+    return;
+  }
+  next();
+}

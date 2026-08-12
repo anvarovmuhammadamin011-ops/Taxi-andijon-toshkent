@@ -23,7 +23,7 @@ export default function PostCard({ post }: Props) {
             </span>
           )}
           <button
-            onClick={() => toggleSaved(post.id)}
+            onClick={() => toggleSaved(post)}
             className="text-lg leading-none"
             aria-label="Save"
           >

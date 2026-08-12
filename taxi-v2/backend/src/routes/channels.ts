@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { authenticateToken, authenticateAdmin } from '../middleware/auth';
+import { requireAdminKey } from '../middleware/auth';
 import { getChannels, addChannel, updateChannel, deleteChannel } from '../services/storage';
 import { telegramCollector } from '../services/telegram';
 import { Channel } from '../types';
@@ -12,8 +12,8 @@ router.get('/', (req: Request, res: Response) => {
   res.json({ ok: true, data: channels });
 });
 
-// POST /api/channels/sync-folder - Sync channels from a Telegram folder (admin only)
-router.post('/sync-folder', authenticateToken, authenticateAdmin, async (req: Request, res: Response) => {
+// POST /api/channels/sync-folder - Sync channels from a Telegram folder (owner only)
+router.post('/sync-folder', requireAdminKey, async (req: Request, res: Response) => {
   if (!telegramCollector.isConnected()) {
     return res.status(400).json({ ok: false, error: 'Telegram not connected. Configure TELEGRAM_SESSION first.' });
   }
@@ -26,8 +26,8 @@ router.post('/sync-folder', authenticateToken, authenticateAdmin, async (req: Re
   }
 });
 
-// POST /api/channels - Add new channel (admin only)
-router.post('/', authenticateToken, authenticateAdmin, (req: Request, res: Response) => {
+// POST /api/channels - Add new channel (owner only)
+router.post('/', requireAdminKey, (req: Request, res: Response) => {
   const { username, title, channelId } = req.body;
   if (!username) return res.status(400).json({ ok: false, error: 'Username required' });
 
@@ -53,8 +53,8 @@ router.post('/', authenticateToken, authenticateAdmin, (req: Request, res: Respo
   res.json({ ok: true, data: channel });
 });
 
-// PATCH /api/channels/:id - Update channel (admin only)
-router.patch('/:id', authenticateToken, authenticateAdmin, (req: Request, res: Response) => {
+// PATCH /api/channels/:id - Update channel (owner only)
+router.patch('/:id', requireAdminKey, (req: Request, res: Response) => {
   const { status, title } = req.body;
   const updates: Partial<Channel> = {};
   if (status) updates.status = status;
@@ -65,8 +65,8 @@ router.patch('/:id', authenticateToken, authenticateAdmin, (req: Request, res: R
   res.json({ ok: true, data: channel });
 });
 
-// DELETE /api/channels/:id - Delete channel (admin only)
-router.delete('/:id', authenticateToken, authenticateAdmin, (req: Request, res: Response) => {
+// DELETE /api/channels/:id - Delete channel (owner only)
+router.delete('/:id', requireAdminKey, (req: Request, res: Response) => {
   deleteChannel(req.params.id);
   res.json({ ok: true });
 });

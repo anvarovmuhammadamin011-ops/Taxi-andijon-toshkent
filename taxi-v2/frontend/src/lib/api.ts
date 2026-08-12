@@ -1,4 +1,5 @@
 const API_URL = import.meta.env.VITE_API_URL || '';
+import { ADMIN_API_KEY } from './localAuth';
 
 export interface ApiResponse<T> {
   ok: boolean;
@@ -25,4 +26,15 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<A
     localStorage.removeItem('user');
   }
   return data;
+}
+
+// Calls protected by the backend admin key (channel sync / management).
+export async function apiAdmin<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-admin-key': ADMIN_API_KEY,
+    ...(options.headers as Record<string, string>),
+  };
+  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  return res.json();
 }
