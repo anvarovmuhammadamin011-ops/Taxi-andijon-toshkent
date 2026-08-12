@@ -11,21 +11,45 @@ import { Post, Channel } from '../types';
 
 type NewPostHandler = (post: Post) => void;
 
+interface IncomingMeta {
+  channelId: string;
+  channelTitle: string;
+  channelUrl: string;
+  messageId: number;
+  messageDate: string;
+}
+
 class TelegramCollector {
-  private client: TelegramClient | null = null;
+  private client: TelegramClient | null = null; // user session (channel monitoring)
+  private botClient: TelegramClient | null = null; // bot (forwarded posts)
   private connected = false;
   private onNewPost: NewPostHandler | null = null;
 
   async connect(): Promise<void> {
     if (this.connected) return;
 
-    // Skip if no session configured
-    if (!config.telegram.session) {
-      logger.warn('Telegram session not configured. Skipping Telegram connection.');
-      logger.warn('Run: npx ts-node login.ts to generate a session');
+    const tasks: Promise<void>[] = [];
+    if (config.telegram.session) tasks.push(this.connectUser());
+    if (config.telegram.botToken) tasks.push(this.connectBot());
+
+    if (tasks.length === 0) {
+      logger.warn('No Telegram credentials configured (need TELEGRAM_SESSION or BOT_TOKEN).');
       return;
     }
 
+    await Promise.allSettled(tasks);
+    this.connected = !!(this.client || this.botClient);
+    logger.info(`Telegram connected: user=${!!this.client}, bot=${!!this.botClient}`);
+
+    if (this.client) {
+      await this.syncFolderChannels(config.telegram.folder).catch((err) => {
+        logger.error('Failed to sync folder channels:', err);
+      });
+    }
+  }
+
+  // --- User-session client (monitors configured channels) ---
+  private async connectUser(): Promise<void> {
     try {
       const session = new StringSession(config.telegram.session);
       this.client = new TelegramClient(session, config.telegram.apiId, config.telegram.apiHash, {
@@ -43,22 +67,132 @@ class TelegramCollector {
         onError: (err: any) => { logger.error('Telegram auth error:', err); },
       });
 
-      this.connected = true;
-      logger.info('Telegram client connected');
-
-      const sessionString = session.save();
-      if (!config.telegram.session) {
-        logger.info('Save this session:', sessionString);
-      }
-
-      this.setupEventListeners();
-
-      // Auto-discover channels from the configured Telegram folder
-      await this.syncFolderChannels(config.telegram.folder).catch((err) => {
-        logger.error('Failed to sync folder channels:', err);
-      });
+      this.setupChannelHandler();
     } catch (error) {
-      logger.error('Telegram connection failed:', error);
+      logger.error('Telegram user connection failed:', error);
+      this.client = null;
+    }
+  }
+
+  private setupChannelHandler(): void {
+    if (!this.client) return;
+    this.client.addEventHandler(async (update: any) => {
+      try {
+        if (update instanceof Api.UpdateNewChannelMessage || update instanceof Api.UpdateNewMessage) {
+          const message = update.message as any;
+          if (!message || !message.message) return;
+
+          const channelId = message.peerId?.channelId?.toString();
+          if (!channelId) return;
+
+          const channels = getActiveChannels();
+          const channel = channels.find((c) => c.channelId === channelId);
+          if (!channel) return;
+
+          this.processText(message.message, {
+            channelId,
+            channelTitle: channel.title,
+            channelUrl: channel.url,
+            messageId: message.id,
+            messageDate: new Date(message.date * 1000).toISOString(),
+          }, channel);
+        }
+      } catch (error) {
+        logger.error('Error processing Telegram update:', error);
+      }
+    });
+  }
+
+  // --- Bot client (receives forwarded posts sent to the bot) ---
+  private async connectBot(): Promise<void> {
+    try {
+      const session = new StringSession('');
+      this.botClient = new TelegramClient(session, config.telegram.apiId, config.telegram.apiHash, {
+        connectionRetries: 5,
+        timeout: 30,
+        deviceModel: 'Taxi Collector Bot',
+        systemVersion: '1.0',
+        appVersion: '1.0',
+      });
+
+      await this.botClient.start({ botToken: config.telegram.botToken } as any);
+      logger.info('Telegram bot connected');
+      this.setupBotHandler();
+    } catch (error) {
+      logger.error('Telegram bot connection failed:', error);
+      this.botClient = null;
+    }
+  }
+
+  private setupBotHandler(): void {
+    if (!this.botClient) return;
+    this.botClient.addEventHandler(async (update: any) => {
+      try {
+        if (!(update instanceof Api.UpdateNewMessage)) return;
+        const message = update.message as any;
+        if (!message || message.out || !message.message) return;
+
+        const fwd = message.fwd_from;
+        const channelId = fwd?.fromId?.channelId?.toString() || 'bot';
+        const channelTitle = (fwd?.fromName as string) || 'Bot (forwarded)';
+        const channelUrl = fwd?.fromId?.channelId ? `https://t.me/c/${fwd.fromId.channelId}` : '';
+
+        this.processText(message.message, {
+          channelId,
+          channelTitle,
+          channelUrl,
+          messageId: message.id,
+          messageDate: message.date ? new Date(message.date * 1000).toISOString() : new Date().toISOString(),
+        }, null);
+      } catch (error) {
+        logger.error('Error processing bot update:', error);
+      }
+    });
+  }
+
+  // Shared classification + persistence
+  private processText(text: string, meta: IncomingMeta, channel: { id: string; totalCollectedPosts: number; totalPassengerPosts: number; totalDriverPosts: number } | null): void {
+    const result = classifyMessage(text);
+
+    if (channel) {
+      updateChannel(channel.id, {
+        totalCollectedPosts: channel.totalCollectedPosts + 1,
+        totalDriverPosts: channel.totalDriverPosts + (result.classification === 'driver' ? 1 : 0),
+        lastProcessedMessageId: meta.messageId,
+        lastEventTime: new Date().toISOString(),
+      });
+    }
+
+    // Only store passenger posts
+    if (result.classification !== 'passenger') return;
+
+    const fingerprint = generateFingerprint(text);
+    const phone = extractPhone(text);
+    const isDuplicate = !!(phone && findPostByPhone(phone)) || !!findPostByFingerprint(fingerprint);
+
+    const post: Post = {
+      id: `${meta.channelId}_${meta.messageId}`,
+      messageId: meta.messageId,
+      channelId: meta.channelId,
+      channelTitle: meta.channelTitle,
+      channelUrl: meta.channelUrl,
+      originalText: text,
+      normalizedText: normalizeText(text),
+      route: detectRoute(text),
+      passengerCount: extractPassengerCount(text),
+      phone,
+      username: extractUsername(text),
+      classification: result.classification,
+      confidence: result.confidence,
+      duplicateFingerprint: fingerprint,
+      isDuplicate,
+      messageDate: meta.messageDate,
+      collectedAt: new Date().toISOString(),
+    };
+
+    if (!isDuplicate) {
+      addPost(post);
+      if (this.onNewPost) this.onNewPost(post);
     }
   }
 
@@ -69,7 +203,7 @@ class TelegramCollector {
    */
   async syncFolderChannels(folderName: string): Promise<Channel[]> {
     if (!this.client || !this.connected) {
-      throw new Error('Telegram client not connected');
+      throw new Error('Telegram user client not connected');
     }
 
     let filters: any;
@@ -119,13 +253,13 @@ class TelegramCollector {
         continue;
       }
 
-      const channel: Channel = {
+      const channel = {
         id: `ch-${numericId}`,
         channelId: numericId,
         username,
         title,
         url,
-        status: 'active',
+        status: 'active' as const,
         lastProcessedMessageId: 0,
         lastEventTime: null,
         totalCollectedPosts: 0,
@@ -141,82 +275,6 @@ class TelegramCollector {
     return discovered;
   }
 
-  private setupEventListeners(): void {
-    if (!this.client) return;
-
-    this.client.addEventHandler(async (update: any) => {
-      try {
-        if (update instanceof Api.UpdateNewChannelMessage || update instanceof Api.UpdateNewMessage) {
-          const message = update.message as any;
-          if (!message || !message.message) return;
-
-          const channelId = message.peerId?.channelId?.toString();
-          if (!channelId) return;
-
-          const channels = getActiveChannels();
-          const channel = channels.find((c) => c.channelId === channelId);
-          if (!channel) return;
-
-          const text = message.message;
-          const messageId = message.id;
-          const messageDate = new Date(message.date * 1000).toISOString();
-
-          // Classify
-          const result = classifyMessage(text);
-
-          // Only process passengers
-          if (result.classification !== 'passenger') {
-            await updateChannel(channel.id, {
-              totalCollectedPosts: channel.totalCollectedPosts + 1,
-              totalDriverPosts: channel.totalDriverPosts + (result.classification === 'driver' ? 1 : 0),
-            });
-            return;
-          }
-
-          // Check duplicate
-          const fingerprint = generateFingerprint(text);
-          const phone = extractPhone(text);
-          const isDuplicate = !!(phone && findPostByPhone(phone)) || !!findPostByFingerprint(fingerprint);
-
-          const post: Post = {
-            id: `${channelId}_${messageId}`,
-            messageId,
-            channelId: channel.channelId,
-            channelTitle: channel.title,
-            channelUrl: channel.url,
-            originalText: text,
-            normalizedText: normalizeText(text),
-            route: detectRoute(text),
-            passengerCount: extractPassengerCount(text),
-            phone,
-            username: extractUsername(text),
-            classification: result.classification,
-            confidence: result.confidence,
-            duplicateFingerprint: fingerprint,
-            isDuplicate,
-            messageDate,
-            collectedAt: new Date().toISOString(),
-          };
-
-          if (!isDuplicate) {
-            addPost(post);
-            if (this.onNewPost) this.onNewPost(post);
-          }
-
-          // Update channel stats
-          await updateChannel(channel.id, {
-            lastProcessedMessageId: messageId,
-            lastEventTime: new Date().toISOString(),
-            totalCollectedPosts: channel.totalCollectedPosts + 1,
-            totalPassengerPosts: channel.totalPassengerPosts + 1,
-          });
-        }
-      } catch (error) {
-        logger.error('Error processing Telegram update:', error);
-      }
-    });
-  }
-
   onPost(handler: NewPostHandler): void {
     this.onNewPost = handler;
   }
@@ -226,10 +284,11 @@ class TelegramCollector {
   }
 
   async disconnect(): Promise<void> {
-    if (this.client) {
-      await this.client.disconnect();
-      this.connected = false;
-    }
+    if (this.client) await this.client.disconnect();
+    if (this.botClient) await this.botClient.disconnect();
+    this.connected = false;
+    this.client = null;
+    this.botClient = null;
   }
 }
 
