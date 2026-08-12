@@ -29,7 +29,21 @@ async function main() {
   const httpServer = createServer(app);
 
   // Middleware
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          'script-src': ["'self'", 'https://telegram.org', 'https://telegram.org/js'],
+          'style-src': ["'self'", "'unsafe-inline'", 'https:'],
+          'img-src': ["'self'", 'data:', 'https:'],
+          'connect-src': ["'self'", 'https:', 'wss:'],
+          'script-src-elem': ["'self'", 'https://telegram.org', 'https://telegram.org/js'],
+        },
+      },
+      crossOriginEmbedderPolicy: false,
+    })
+  );
   app.use(cors({ origin: config.server.frontendUrls, credentials: true }));
   app.use(express.json({ limit: '10kb' }));
 
