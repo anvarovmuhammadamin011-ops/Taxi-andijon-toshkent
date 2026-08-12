@@ -8,7 +8,7 @@ export const config = {
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
     frontendUrls: (process.env.FRONTEND_URL || 'http://localhost:5173')
       .split(',')
-      .map((u) => u.trim())
+      .map((u) => u.trim().replace(/\/+$/, ''))
       .filter(Boolean),
     // Allow login without Telegram initData (preview/demo mode). NEVER enable in production.
     allowBrowserLogin: process.env.ALLOW_BROWSER_LOGIN === 'true',
