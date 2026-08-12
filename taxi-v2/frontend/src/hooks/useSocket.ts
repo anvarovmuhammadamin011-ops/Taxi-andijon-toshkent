@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { Post } from '../lib/types';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
+const LOCAL_MODE = import.meta.env.VITE_LOCAL_MODE === 'true' || !API_URL;
 
 export function useSocket() {
   const [connected, setConnected] = useState(false);
@@ -11,6 +12,8 @@ export function useSocket() {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
+    if (LOCAL_MODE) return;
+
     const socket = io(API_URL, {
       transports: ['websocket'],
       reconnection: true,
