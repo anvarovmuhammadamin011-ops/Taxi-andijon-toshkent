@@ -43,7 +43,14 @@ app.use('/api/admin', adminRouter);
 app.use('/api/me', meRouter);
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', telegram: telegramCollector.isConnected() });
+  res.json({
+    status: 'ok',
+    telegram: telegramCollector.isConnected(),
+    telegramConfigured: !!(config.telegram.apiId && config.telegram.apiHash && config.telegram.session),
+    apiIdSet: config.telegram.apiId > 0,
+    hasSession: config.telegram.session.length > 0,
+    botTokenSet: !!config.telegram.botToken,
+  });
 });
 
 // Serve built frontend (optional single-service deploy)

@@ -20,9 +20,9 @@ export const config = {
   },
   telegram: {
     apiId: num(process.env.API_ID, 0),
-    apiHash: process.env.API_HASH || '',
-    botToken: process.env.BOT_TOKEN || '',
-    session: process.env.TELEGRAM_SESSION || '',
+    apiHash: (process.env.API_HASH || '').trim(),
+    botToken: (process.env.BOT_TOKEN || '').trim(),
+    session: (process.env.TELEGRAM_SESSION || '').trim(),
   },
   admin: {
     key: process.env.ADMIN_KEY || 'change_this_admin_key',
