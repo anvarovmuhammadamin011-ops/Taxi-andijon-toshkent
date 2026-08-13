@@ -29,11 +29,11 @@ function secret(name: string, d = ''): string {
 export const config = {
   server: {
     port: num(process.env.PORT, 3001),
-    frontendUrls: (process.env.FRONTEND_URLS || 'http://localhost:5173')
+    frontendUrls: (secret('FRONTEND_URLS') || 'http://localhost:5173')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
-    seedChannels: (process.env.SEED_CHANNELS || '')
+    seedChannels: (secret('SEED_CHANNELS') || '')
       .split(',')
       .map((s) => s.trim().replace('@', ''))
       .filter(Boolean),
