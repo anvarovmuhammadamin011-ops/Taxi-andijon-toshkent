@@ -76,59 +76,66 @@ function seedIfEmpty(): void {
   const users = readUsers();
   if (users.length > 0) {
     ensureAdmin();
-    ensureDemo();
+    ensureAnvarov();
+    removeDemoUser();
     return;
   }
-  writeUsers([makeAdmin(), makeTestUser()]);
+  writeUsers([makeAdmin(), makeAnvarov()]);
 }
 
-function makeTestUser(): LocalUser {
+function makeAnvarov(): LocalUser {
   const now = new Date();
   const end = new Date();
   end.setMonth(end.getMonth() + 1);
   return {
-    id: 'demo-test',
-    name: 'Ilyosbek',
-    telegramId: 8877452838,
-    login: 'test',
-    role: 'user',
+    id: 'admin-anvarov',
+    name: 'ilyos Anvarov',
+    telegramId: 0,
+    login: 'Anvarov',
+    role: 'admin',
     status: 'active',
     monthlyPrice: 50000,
     subscriptionStart: now.toISOString(),
     subscriptionEnd: end.toISOString(),
     settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
-    passwordHash: hashPassword('test'),
+    passwordHash: hashPassword('Anvarov'),
     updatedAt: now.toISOString(),
   };
 }
 
-// Enforce the seeded test account on every load (even if already seeded) so the
+// Enforce the seeded admin account on every load (even if already seeded) so the
 // credentials always match the owner's requested ones.
-function ensureDemo(): void {
+function ensureAnvarov(): void {
   const users = readUsers();
-  const idx = users.findIndex((u) => u.id === 'demo-test' || u.login === 'test');
+  const idx = users.findIndex((u) => u.id === 'admin-anvarov' || u.login === 'Anvarov');
   const now = new Date();
   const end = new Date();
   end.setMonth(end.getMonth() + 1);
-  const test: LocalUser = {
-    id: 'demo-test',
-    name: 'Ilyosbek',
-    telegramId: 8877452838,
-    login: 'test',
-    role: 'user',
+  const admin: LocalUser = {
+    id: 'admin-anvarov',
+    name: 'ilyos Anvarov',
+    telegramId: 0,
+    login: 'Anvarov',
+    role: 'admin',
     status: 'active',
     monthlyPrice: 50000,
     subscriptionStart: now.toISOString(),
     subscriptionEnd: end.toISOString(),
     settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
-    passwordHash: hashPassword('test'),
+    passwordHash: hashPassword('Anvarov'),
     updatedAt: now.toISOString(),
   };
   if (idx === -1) {
-    users.push(test);
+    users.push(admin);
   } else {
-    users[idx] = { ...users[idx], ...test, settings: users[idx].settings || test.settings };
+    users[idx] = { ...users[idx], ...admin, settings: users[idx].settings || admin.settings };
   }
+  writeUsers(users);
+}
+
+// Remove any leftover demo/test accounts from previous versions.
+function removeDemoUser(): void {
+  const users = readUsers().filter((u) => !(u.id === 'demo-test' || u.login === 'test' || u.login === 'Ilyosbek'));
   writeUsers(users);
 }
 

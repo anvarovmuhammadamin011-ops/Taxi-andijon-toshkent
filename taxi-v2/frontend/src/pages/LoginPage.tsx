@@ -31,42 +31,6 @@ export default function LoginPage() {
     }
   };
 
-  const quickAdmin = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      const res = await authLogin('admin', 'admin');
-      if (res.ok) {
-        navigate(res.user?.role === 'admin' ? '/admin' : '/');
-      } else {
-        setError('Admin kirishda xatolik: ' + (res.error || ''));
-      }
-    } catch (e: any) {
-      console.error('quickAdmin error', e);
-      setError('Xatolik: ' + (e?.message || e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const quickDemo = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      const res = await authLogin('test', 'test');
-      if (res.ok) {
-        navigate('/');
-      } else {
-        setError('Demo kirishda xatolik: ' + (res.error || ''));
-      }
-    } catch (e: any) {
-      console.error('quickDemo error', e);
-      setError('Xatolik: ' + (e?.message || e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] p-4">
       <div className="w-full max-w-sm">
@@ -140,21 +104,7 @@ export default function LoginPage() {
           {mode === 'login' ? "Akkaunt yo'qmi? Ro'yxatdan o'ting" : 'Akkauntingiz bormi? Kirish'}
         </button>
 
-        <button
-          onClick={quickAdmin}
-          className="w-full mt-4 flex items-center justify-center gap-2 bg-[var(--accent)] text-white font-semibold py-3 rounded-xl"
-        >
-          👨‍💼 Admin panelga kirish (tez)
-        </button>
-        <p className="text-center text-xs text-[var(--text-secondary)] mt-2">login: muhammadamin · parol: anvarovmuhammadamin</p>
-
-        <button
-          onClick={quickDemo}
-          className="w-full mt-2 flex items-center justify-center gap-2 bg-[var(--card)] border border-[var(--border)] text-[var(--text)] font-semibold py-3 rounded-xl"
-        >
-          👤 Demo foydalanuvchi (tez)
-        </button>
-        <p className="text-center text-xs text-[var(--text-secondary)] mt-2">login: test · parol: test</p>
+        <p className="text-center text-xs text-[var(--text-secondary)] mt-4">login: Anvarov · parol: Anvarov</p>
       </div>
     </div>
   );
