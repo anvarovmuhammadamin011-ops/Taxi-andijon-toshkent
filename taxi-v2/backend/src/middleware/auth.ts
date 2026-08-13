@@ -1,58 +1,65 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken } from '../utils/telegram';
-import { AuthPayload } from '../types';
+import crypto from 'crypto';
+import { config } from '../config';
+import { getUserById, updateUser } from '../services/storage';
 
-declare global {
-  namespace Express {
-    interface Request {
-      user?: AuthPayload;
-    }
-  }
+// In-memory token store (token -> userId). For production use Redis/JWT.
+const tokens = new Map<string, string>();
+
+export function generateToken(userId: string): string {
+  const t = crypto.randomBytes(32).toString('hex');
+  tokens.set(t, userId);
+  return t;
 }
 
-// Middleware to verify JWT token
-export function authenticateToken(req: Request, res: Response, next: NextFunction): void {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+export function userIdFromToken(token?: string): string | null {
+  if (!token) return null;
+  return tokens.get(token) || null;
+}
+
+export function isSubscriptionActive(userId: string): boolean {
+  const u = getUserById(userId);
+  if (!u) return false;
+  if (u.status === 'blocked') return false;
+  const active = new Date(u.subscriptionEnd).getTime() > Date.now();
+  if (!active && u.status !== 'expired') {
+    updateUser(userId, { status: 'expired' });
+  }
+  return active;
+}
+
+export interface AuthRequest extends Request {
+  userId?: string;
+}
+
+export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+  const uid = userIdFromToken(token);
+  if (!uid) {
     res.status(401).json({ ok: false, error: 'Unauthorized' });
     return;
   }
-
-  const token = authHeader.replace('Bearer ', '');
-  const payload = verifyToken(token);
-
-  if (!payload) {
-    res.status(401).json({ ok: false, error: 'Invalid token' });
+  if (!isSubscriptionActive(uid)) {
+    res.status(403).json({ ok: false, error: 'Obuna muddati tugagan' });
     return;
   }
-
-  req.user = {
-    userId: payload.userId,
-    telegramId: payload.telegramId,
-    role: payload.role as any,
-  };
+  req.userId = uid;
   next();
 }
 
-// Middleware to verify admin role
-export function authenticateAdmin(req: Request, res: Response, next: NextFunction): void {
-  if (!req.user || req.user.role !== 'admin') {
-    res.status(403).json({ ok: false, error: 'Forbidden' });
-    return;
-  }
-  next();
-}
-
-// Middleware to protect owner-only endpoints (channel sync / management) with a
-// shared admin key. The key is ADMIN_API_KEY on the server; the frontend sends it
-// via VITE_ADMIN_API_KEY. Keeping auth on the frontend means there is no backend
-// user session, so we use a simple shared secret instead of JWT admin.
 export function requireAdminKey(req: Request, res: Response, next: NextFunction): void {
-  const key = req.header('x-admin-key');
-  const expected = process.env.ADMIN_API_KEY || 'taxi-admin';
-  if (!key || key !== expected) {
-    res.status(401).json({ ok: false, error: 'Admin key required' });
+  const key = req.headers['x-admin-key'] || req.query.adminKey;
+  if (key !== config.admin.key) {
+    res.status(403).json({ ok: false, error: 'Admin kaliti noto\'g\'ri' });
     return;
   }
   next();
+}
+
+// Strip sensitive fields before sending a user to the client (security task #8)
+export function publicUser(u: any) {
+  if (!u) return null;
+  const { passwordHash, ...rest } = u;
+  return rest;
 }

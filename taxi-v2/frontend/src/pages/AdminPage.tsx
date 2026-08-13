@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePosts } from '../context/PostsContext';
+import { apiAdmin } from '../lib/api';
 import * as localAuth from '../lib/localAuth';
 import * as adminStore from '../lib/adminStore';
 import { Post, User, routeLabel } from '../lib/types';
@@ -22,17 +23,111 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'system', label: 'System Status', icon: '📡' },
 ];
 
+// Admin-managed posts: fetched from the backend and kept in sync.
+function useAdminPosts() {
+  const [posts, setPosts] = useState<Post[]>([]);
+
+  const load = () => {
+    apiAdmin<Post[]>('/api/posts/all')
+      .then((res) => {
+        if (res.ok) setPosts(res.data);
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const removePost = async (id: string) => {
+    setPosts((prev) => prev.filter((p) => p.id !== id));
+    try {
+      await apiAdmin(`/api/posts/${id}`, { method: 'DELETE' });
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const reclassify = async (id: string, classification: 'passenger' | 'driver' | 'unknown') => {
+    setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, classification } : p)));
+    try {
+      await apiAdmin(`/api/posts/${id}`, { method: 'PATCH', body: JSON.stringify({ classification }) });
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return { posts, removePost, reclassify, refresh: load };
+}
+
+// Admin-managed channels: fetched from backend.
+interface AdminChannel {
+  id: string;
+  username: string;
+  title: string;
+  status: string;
+}
+
+function useAdminChannels() {
+  const [channels, setChannels] = useState<AdminChannel[]>([]);
+
+  const load = () => {
+    apiAdmin<AdminChannel[]>('/api/channels')
+      .then((res) => {
+        if (res.ok) setChannels(res.data);
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const addChannel = async (username: string, title: string) => {
+    try {
+      await apiAdmin('/api/channels', { method: 'POST', body: JSON.stringify({ username, title }) });
+    } catch {
+      /* ignore */
+    }
+    load();
+  };
+
+  const deleteChannel = async (id: string) => {
+    setChannels((prev) => prev.filter((c) => c.id !== id));
+    try {
+      await apiAdmin(`/api/channels/${id}`, { method: 'DELETE' });
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const toggleChannel = async (id: string, active: boolean) => {
+    try {
+      await apiAdmin(`/api/channels/${id}`, { method: 'PATCH', body: JSON.stringify({ status: active ? 'active' : 'inactive' }) });
+    } catch {
+      /* ignore */
+    }
+    load();
+  };
+
+  return { channels, addChannel, deleteChannel, toggleChannel, refresh: load };
+}
+
 export default function AdminPage() {
   const { user } = useAuth();
-  const { posts, setPosts, removePost, botConfigured } = usePosts();
+  const { botConfigured } = usePosts();
+  const { posts, removePost, reclassify, refresh: refreshPosts } = useAdminPosts();
+  const { channels, addChannel, deleteChannel, toggleChannel, refresh: refreshChannels } = useAdminChannels();
   const [tab, setTab] = useState<Tab>('dashboard');
   const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
-  const refresh = () => setRefreshKey((k) => k + 1);
+  const refresh = () => {
+    setRefreshKey((k) => k + 1);
+    refreshPosts();
+    refreshChannels();
+  };
 
   const users = useMemo<User[]>(() => localAuth.getAllUsers(), [refreshKey]);
-  const channels = useMemo(() => Array.from(new Set(posts.map((p) => p.channelTitle))), [posts]);
-  const paused = useMemo(() => adminStore.getPausedChannels(), [refreshKey]);
 
   const stats = useMemo(() => {
     const now = Date.now();
@@ -104,9 +199,9 @@ export default function AdminPage() {
       <main className="flex-1 p-4 max-w-4xl mx-auto w-full">
         {tab === 'dashboard' && <Dashboard stats={stats} revenue={revenue} botConfigured={botConfigured} />}
         {tab === 'users' && <UsersTab users={users} refresh={refresh} />}
-        {tab === 'channels' && <ChannelsTab channels={channels} paused={paused} refresh={refresh} />}
-        {tab === 'posts' && <PostsTab posts={posts} onRemove={removePost} onSetPosts={setPosts} />}
-        {tab === 'classifier' && <ClassifierTab posts={posts} onSetPosts={setPosts} refresh={refresh} />}
+        {tab === 'channels' && <ChannelsTab channels={channels} onAdd={addChannel} onDelete={deleteChannel} onToggle={toggleChannel} />}
+        {tab === 'posts' && <PostsTab posts={posts} onRemove={removePost} />}
+        {tab === 'classifier' && <ClassifierTab posts={posts} onReclassify={reclassify} />}
         {tab === 'subscriptions' && <SubscriptionsTab users={users} refresh={refresh} />}
         {tab === 'revenue' && <RevenueTab revenue={revenue} users={users} />}
         {tab === 'routes' && <RoutesTab refresh={refresh} />}
@@ -256,25 +351,59 @@ function AddUserForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function ChannelsTab({ channels, paused, refresh }: { channels: string[]; paused: string[]; refresh: () => void }) {
-  const setPaused = (title: string, p: boolean) => { adminStore.setChannelPaused(title, p); refresh(); };
+function ChannelsTab({
+  channels,
+  onAdd,
+  onDelete,
+  onToggle,
+}: {
+  channels: AdminChannel[];
+  onAdd: (username: string, title: string) => void;
+  onDelete: (id: string) => void;
+  onToggle: (id: string, active: boolean) => void;
+}) {
+  const [username, setUsername] = useState('');
+  const [title, setTitle] = useState('');
+  const submit = () => {
+    if (!username) return;
+    onAdd(username.replace(/^@/, ''), title || username);
+    setUsername('');
+    setTitle('');
+  };
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">📢 Telegram Kanallar</h1>
-      <p className="text-sm text-[var(--text-secondary)]">{channels.length} ta kanal aniqlangan</p>
-      {channels.map((c) => (
-        <div key={c} className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)] flex items-center justify-between">
-          <p className="font-medium">{c}</p>
-          <button onClick={() => setPaused(c, !paused.includes(c))} className={`px-3 py-1.5 text-xs rounded-lg ${paused.includes(c) ? 'bg-gray-100 text-gray-600' : 'bg-green-100 text-green-700'}`}>
-            {paused.includes(c) ? '⏸️ Paused' : '🟢 Active'}
-          </button>
-        </div>
-      ))}
+      <p className="text-sm text-[var(--text-secondary)]">{channels.length} ta kanal</p>
+
+      <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)] space-y-2">
+        <p className="font-medium text-sm">Yangi kanal qo'shish</p>
+        <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username (masalan: taxsislar)" className="w-full px-3 py-2 rounded-lg bg-[var(--bg)] border border-[var(--border)] text-sm" />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nomi (ixtiyoriy)" className="w-full px-3 py-2 rounded-lg bg-[var(--bg)] border border-[var(--border)] text-sm" />
+        <button onClick={submit} className="w-full bg-[var(--accent)] text-white py-2 rounded-lg text-sm font-medium">+ Qo'shish</button>
+      </div>
+
+      {channels.map((c) => {
+        const active = c.status === 'active';
+        return (
+          <div key={c.id} className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)] flex items-center justify-between">
+            <div className="min-w-0">
+              <p className="font-medium truncate">@{c.username}</p>
+              <p className="text-xs text-[var(--text-secondary)]">{c.title}</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => onToggle(c.id, active)} className={`px-3 py-1.5 text-xs rounded-lg ${active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                {active ? '🟢 Active' : '⏸️ Paused'}
+              </button>
+              <button onClick={() => onDelete(c.id)} className="px-3 py-1.5 bg-red-50 text-[var(--red)] text-xs rounded-lg">🗑️</button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function PostsTab({ posts, onRemove, onSetPosts }: { posts: Post[]; onRemove: (id: string) => void; onSetPosts: (p: Post[]) => void }) {
+function PostsTab({ posts, onRemove }: { posts: Post[]; onRemove: (id: string) => void }) {
   const [filter, setFilter] = useState('all');
   const filtered = posts.filter((p) => filter === 'all' || p.classification === filter);
   return (
@@ -299,12 +428,8 @@ function PostsTab({ posts, onRemove, onSetPosts }: { posts: Post[]; onRemove: (i
   );
 }
 
-function ClassifierTab({ posts, onSetPosts, refresh }: { posts: Post[]; onSetPosts: (p: Post[]) => void; refresh: () => void }) {
+function ClassifierTab({ posts, onReclassify }: { posts: Post[]; onReclassify: (id: string, cls: 'passenger' | 'driver' | 'unknown') => void }) {
   const unknown = posts.filter((p) => p.classification === 'unknown');
-  const reclassify = (id: string, cls: string) => {
-    const next = posts.map((p) => (p.id === id ? { ...p, classification: cls } : p));
-    onSetPosts(next);
-  };
   const counts = { passenger: posts.filter((p) => p.classification === 'passenger').length, driver: posts.filter((p) => p.classification === 'driver').length, unknown: unknown.length };
   return (
     <div className="space-y-4">
@@ -320,8 +445,8 @@ function ClassifierTab({ posts, onSetPosts, refresh }: { posts: Post[]; onSetPos
         <div key={p.id} className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
           <p className="text-sm whitespace-pre-wrap">{p.originalText}</p>
           <div className="mt-2 flex gap-2">
-            <button onClick={() => reclassify(p.id, 'passenger')} className="px-3 py-1.5 bg-green-100 text-green-700 text-xs rounded-lg">🟢 Passenger</button>
-            <button onClick={() => reclassify(p.id, 'driver')} className="px-3 py-1.5 bg-red-100 text-red-600 text-xs rounded-lg">🔴 Driver</button>
+            <button onClick={() => onReclassify(p.id, 'passenger')} className="px-3 py-1.5 bg-green-100 text-green-700 text-xs rounded-lg">🟢 Passenger</button>
+            <button onClick={() => onReclassify(p.id, 'driver')} className="px-3 py-1.5 bg-red-100 text-red-600 text-xs rounded-lg">🔴 Driver</button>
           </div>
         </div>
       ))}

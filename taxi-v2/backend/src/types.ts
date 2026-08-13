@@ -1,17 +1,7 @@
-export type Route = 'toshkent_andijon' | 'andijon_toshkent' | 'unknown';
+export type RouteId = 'toshkent_andijon' | 'andijon_toshkent' | 'unknown';
 export type Classification = 'passenger' | 'driver' | 'unknown';
-export type UserRole = 'user' | 'admin';
+export type UserRole = 'admin' | 'user';
 export type UserStatus = 'active' | 'blocked' | 'expired';
-export type ChannelStatus = 'active' | 'inactive';
-export type SubscriptionStatus = 'active' | 'expired';
-export type Language = 'uz' | 'ru';
-
-export interface UserSettings {
-  darkMode: boolean;
-  notifications: boolean;
-  defaultRoute: Route;
-  language: Language;
-}
 
 export interface Post {
   id: string;
@@ -21,7 +11,7 @@ export interface Post {
   channelUrl: string;
   originalText: string;
   normalizedText: string;
-  route: Route;
+  route: RouteId;
   passengerCount: number | null;
   phone: string | null;
   username: string | null;
@@ -31,6 +21,15 @@ export interface Post {
   isDuplicate: boolean;
   messageDate: string;
   collectedAt: string;
+  mediaType?: string | null;
+  mediaUrl?: string | null;
+}
+
+export interface UserSettings {
+  darkMode: boolean;
+  notifications: boolean;
+  defaultRoute: RouteId;
+  language: 'uz' | 'ru';
 }
 
 export interface User {
@@ -49,30 +48,13 @@ export interface User {
   updatedAt: string;
 }
 
-export interface UserNotification {
-  id: string;
-  userId: string;
-  postId: string;
-  route: Route;
-  passengerCount: number | null;
-  text: string;
-  read: boolean;
-  createdAt: string;
-}
-
-export interface SavedPost {
-  userId: string;
-  postId: string;
-  savedAt: string;
-}
-
 export interface Channel {
   id: string;
   channelId: string;
   username: string;
   title: string;
   url: string;
-  status: ChannelStatus;
+  status: 'active' | 'paused';
   lastProcessedMessageId: number;
   lastEventTime: string | null;
   totalCollectedPosts: number;
@@ -87,33 +69,19 @@ export interface Settings {
   classifierThreshold: number;
 }
 
-export interface AuthPayload {
+export interface UserNotification {
+  id: string;
   userId: string;
-  telegramId: number;
-  role: UserRole;
+  postId: string;
+  route: RouteId;
+  passengerCount: number | null;
+  text: string;
+  read: boolean;
+  createdAt: string;
 }
 
-export interface LoginRequest {
-  login: string;
-  password: string;
-  initData: string;
-}
-
-export interface CreateUserRequest {
-  name: string;
-  telegramId: number;
-  login: string;
-  password: string;
-  monthlyPrice: number;
-  subscriptionMonths: number;
-}
-
-export interface ClassificationResult {
-  classification: Classification;
-  confidence: number;
-  scores: {
-    passenger: number;
-    driver: number;
-  };
-  signals: string[];
+export interface SavedPost {
+  userId: string;
+  postId: string;
+  savedAt: string;
 }

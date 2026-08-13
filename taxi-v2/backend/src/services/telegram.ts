@@ -1,12 +1,28 @@
 import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions';
 import { Api } from 'telegram/tl';
+import * as fs from 'fs';
+import * as path from 'path';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { getActiveChannels, updateChannel, addChannel, getChannelByChannelId } from '../services/storage';
+import {
+  getActiveChannels,
+  getChannels,
+  addChannel,
+  updateChannel,
+  getChannelByChannelId,
+  addPost,
+  findPostByFingerprint,
+  findPostByPhone,
+} from '../services/storage';
+import {
+  normalizeText,
+  extractPhone,
+  extractUsername,
+  extractPassengerCount,
+  generateFingerprint,
+} from '../utils/text';
 import { classifyMessage } from '../services/classifier';
-import { normalizeText, extractPhone, extractUsername, extractPassengerCount, generateFingerprint, detectRoute } from '../utils/text';
-import { addPost, findPostByFingerprint, findPostByPhone } from '../services/storage';
 import { Post, Channel } from '../types';
 
 type NewPostHandler = (post: Post) => void;
@@ -17,158 +33,301 @@ interface IncomingMeta {
   channelUrl: string;
   messageId: number;
   messageDate: string;
+  mediaType?: string | null;
+  mediaUrl?: string | null;
 }
 
 class TelegramCollector {
   private client: TelegramClient | null = null; // user session (channel monitoring)
-  private botClient: TelegramClient | null = null; // bot (forwarded posts)
+  private botClient: TelegramClient | null = null; // bot (forward + admin channels)
   private connected = false;
   private onNewPost: NewPostHandler | null = null;
+  private titleCache: Record<string, string> = {};
+
+  onPost(handler: NewPostHandler): void {
+    this.onNewPost = handler;
+  }
+
+  pushToHandlers(post: Post): void {
+    if (this.onNewPost) this.onNewPost(post);
+  }
+
+  isConnected(): boolean {
+    return this.connected;
+  }
 
   async connect(): Promise<void> {
-    if (this.connected) return;
-
     const tasks: Promise<void>[] = [];
-    if (config.telegram.session) tasks.push(this.connectUser());
+    if (config.telegram.session && config.telegram.apiId) tasks.push(this.connectUser());
     if (config.telegram.botToken) tasks.push(this.connectBot());
-
     if (tasks.length === 0) {
-      logger.warn('No Telegram credentials configured (need TELEGRAM_SESSION or BOT_TOKEN).');
+      logger.warn('No Telegram credentials (need TELEGRAM_SESSION or BOT_TOKEN).');
       return;
     }
-
     await Promise.allSettled(tasks);
-    this.connected = !!(this.client || this.botClient);
+    if (this.connected) {
+      this.joinRegisteredChannels();
+      this.ensureSeedChannels().catch((e) => logger.error('ensureSeedChannels', e));
+    }
     logger.info(`Telegram connected: user=${!!this.client}, bot=${!!this.botClient}`);
-
-    if (this.client) {
-      await this.syncFolderChannels(config.telegram.folder).catch((err) => {
-        logger.error('Failed to sync folder channels:', err);
-      });
-    }
   }
 
-  // --- User-session client (monitors configured channels) ---
-  private async connectUser(): Promise<void> {
-    try {
+  // ---- User session (monitors channels the account is in) ----
+  private connectUser(): Promise<void> {
+    return new Promise<void>((resolve) => {
       const session = new StringSession(config.telegram.session);
-      this.client = new TelegramClient(session, config.telegram.apiId, config.telegram.apiHash, {
+      const client = new TelegramClient(session, config.telegram.apiId, config.telegram.apiHash, {
         connectionRetries: 5,
-        timeout: 30,
-        deviceModel: 'Taxi Collector',
-        systemVersion: '1.0',
-        appVersion: '1.0',
       });
+      client
+        .start({} as any)
+        .then(async () => {
+          this.client = client;
+          this.connected = true;
+          logger.info('Telegram user session connected');
+          this.setupUserHandler();
+          this.joinRegisteredChannels();
+          this.backfillAll(7).catch((e) => logger.error('backfillAll', e));
+          resolve();
+        })
+        .catch((e) => {
+          logger.error('Telegram user session failed:', e);
+          resolve();
+        });
+    });
+  }
 
-      await this.client.start({
-        phoneNumber: async () => { throw new Error('Session not configured'); },
-        phoneCode: async () => { throw new Error('Session not configured'); },
-        password: async () => { throw new Error('Session not configured'); },
-        onError: (err: any) => { logger.error('Telegram auth error:', err); },
+  // ---- Bot (forwarded posts + channels where it is admin) ----
+  private connectBot(): Promise<void> {
+    this.connectBotAttempt(0);
+    return Promise.resolve();
+  }
+
+  private connectBotAttempt(retries = 0): void {
+    const session = new StringSession('');
+    const client = new TelegramClient(session, config.telegram.apiId, config.telegram.apiHash, {
+      connectionRetries: 5,
+      timeout: 30,
+      deviceModel: 'Taxi Collector Bot',
+    });
+    client
+      .start({ botAuthToken: config.telegram.botToken } as any)
+        .then(async () => {
+          const me: any = await client.getMe();
+          this.botClient = client;
+          this.connected = true;
+          logger.info(`Telegram bot connected as @${me.username}`);
+          this.setupBotHandler();
+          this.joinRegisteredChannels();
+          this.backfillAll(7).catch((e) => logger.error('backfillAll', e));
+        })
+      .catch((error: any) => {
+        const isFlood = error?.errorMessage === 'FLOOD' || error?.code === 420;
+        const wait = typeof error?.seconds === 'number' ? error.seconds : 60;
+        if (isFlood && retries < 6) {
+          const delay = Math.min(wait, 600) * 1000 + 3000;
+          logger.warn(`Bot flood-wait (${wait}s). Auto-retry in ${Math.round(delay / 1000)}s...`);
+          setTimeout(() => this.connectBotAttempt(retries + 1), delay);
+          return;
+        }
+        logger.error('Telegram bot connection failed:', error);
       });
+  }
 
-      this.setupChannelHandler();
-    } catch (error) {
-      logger.error('Telegram user connection failed:', error);
-      this.client = null;
+  // Ensure channels listed in SEED_CHANNELS env are registered (survives restarts
+  // without persistent disk; posts are re-backfilled on connect).
+  private async ensureSeedChannels(): Promise<void> {
+    const seeds = config.server.seedChannels || [];
+    if (seeds.length === 0 || !this.client) return;
+    for (const username of seeds) {
+      if (!username) continue;
+      if (getChannels().find((c) => c.username === username)) continue;
+      try {
+        const resolved = await this.resolveChannel(username);
+        const channelId = resolved?.channelId || username;
+        const channelTitle = resolved?.title || username;
+        const channel: Channel = {
+          id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+          channelId,
+          username,
+          title: channelTitle,
+          url: `https://t.me/${username}`,
+          status: 'active',
+          lastProcessedMessageId: 0,
+          lastEventTime: null,
+          totalCollectedPosts: 0,
+          totalPassengerPosts: 0,
+          totalDriverPosts: 0,
+          addedAt: new Date().toISOString(),
+        };
+        addChannel(channel);
+        this.joinChannel(username).catch(() => {});
+        this.backfillChannel(username).catch(() => {});
+        logger.info(`Seed channel ensured: ${username}`);
+      } catch (e) {
+        logger.error('Seed channel failed', username, e);
+      }
     }
   }
 
-  private setupChannelHandler(): void {
+  private joinRegisteredChannels(): void {
+    if (!this.client) return;
+    for (const ch of getActiveChannels()) {
+      this.joinChannel(ch.username).catch(() => {});
+    }
+  }
+
+  async joinChannel(username: string): Promise<{ channelId: string; title: string; url: string } | null> {
+    const client = this.client;
+    if (!client) return null;
+    try {
+      const entity: any = await client.getEntity(username);
+      await client.invoke(new Api.channels.JoinChannel({ channel: username }));
+      return {
+        channelId: entity.id?.toString?.() || entity.channelId?.toString() || username,
+        title: entity.title || username,
+        url: `https://t.me/${String(username).replace('@', '')}`,
+      };
+    } catch (e) {
+      // Already a member or cannot join; still try to resolve entity
+      try {
+        const entity: any = await client.getEntity(username);
+        return {
+          channelId: entity.id?.toString?.() || entity.channelId?.toString() || username,
+          title: entity.title || username,
+          url: `https://t.me/${String(username).replace('@', '')}`,
+        };
+      } catch {
+        return null;
+      }
+    }
+  }
+
+  // Resolve a channel's numeric id (works with bot OR user client) for storage.
+  async resolveChannel(username: string): Promise<{ channelId: string; title: string; url: string } | null> {
+    const client = this.client || this.botClient;
+    if (!client) return null;
+    try {
+      const entity: any = await client.getEntity(username);
+      return {
+        channelId: entity.id?.toString?.() || entity.channelId?.toString() || username,
+        title: entity.title || username,
+        url: `https://t.me/${String(username).replace('@', '')}`,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // ---- User handler ----
+  private setupUserHandler(): void {
     if (!this.client) return;
     this.client.addEventHandler(async (update: any) => {
       try {
-        if (update instanceof Api.UpdateNewChannelMessage || update instanceof Api.UpdateNewMessage) {
-          const message = update.message as any;
-          if (!message || !message.message) return;
-
-          const channelId = message.peerId?.channelId?.toString();
-          if (!channelId) return;
-
-          const channels = getActiveChannels();
-          const channel = channels.find((c) => c.channelId === channelId);
-          if (!channel) return;
-
-          this.processText(message.message, {
-            channelId,
-            channelTitle: channel.title,
-            channelUrl: channel.url,
-            messageId: message.id,
-            messageDate: new Date(message.date * 1000).toISOString(),
-          }, channel);
+        let message: any = null;
+        let channelId = '';
+        let channelTitle = '';
+        if (update instanceof Api.UpdateNewChannelMessage) {
+          message = update.message as any;
+          channelId = message.peerId?.channelId?.toString() || '';
+        } else if (update instanceof Api.UpdateNewMessage) {
+          message = update.message as any;
+          if (!message || message.out) return;
+          channelId = message.peerId?.channelId?.toString() || '';
+        } else {
+          return;
         }
-      } catch (error) {
-        logger.error('Error processing Telegram update:', error);
+        if (!message || !channelId) return;
+        // Faqat allowlist'dagi kanallar
+        const ch = getChannelByChannelId(channelId);
+        if (!ch) return;
+        channelTitle = ch.title;
+        const text = typeof message.message === 'string' ? message.message : '';
+        if (!text && !message.media) return;
+        await this.processIncoming(text, message, {
+          channelId,
+          channelTitle,
+          channelUrl: ch.url || '',
+          messageId: message.id,
+          messageDate: message.date ? new Date(message.date * 1000).toISOString() : new Date().toISOString(),
+        }, ch);
+      } catch (e) {
+        logger.error('User handler error:', e);
       }
     });
   }
 
-  // --- Bot client (receives forwarded posts sent to the bot) ---
-  private async connectBot(): Promise<void> {
-    try {
-      const session = new StringSession('');
-      this.botClient = new TelegramClient(session, config.telegram.apiId, config.telegram.apiHash, {
-        connectionRetries: 5,
-        timeout: 30,
-        deviceModel: 'Taxi Collector Bot',
-        systemVersion: '1.0',
-        appVersion: '1.0',
-      });
-
-      await this.botClient.start({ botToken: config.telegram.botToken } as any);
-      logger.info('Telegram bot connected');
-      this.setupBotHandler();
-    } catch (error) {
-      logger.error('Telegram bot connection failed:', error);
-      this.botClient = null;
-    }
-  }
-
+  // ---- Bot handler ----
   private setupBotHandler(): void {
     if (!this.botClient) return;
     this.botClient.addEventHandler(async (update: any) => {
       try {
-        if (!(update instanceof Api.UpdateNewMessage)) return;
-        const message = update.message as any;
-        if (!message || message.out || !message.message) return;
-
-        const fwd = message.fwd_from;
-        const channelId = fwd?.fromId?.channelId?.toString() || 'bot';
-        const channelTitle = (fwd?.fromName as string) || 'Bot (forwarded)';
-        const channelUrl = fwd?.fromId?.channelId ? `https://t.me/c/${fwd.fromId.channelId}` : '';
-
-        this.processText(message.message, {
+        let message: any = null;
+        let channelId = 'bot';
+        let channelTitle = 'Bot (forwarded)';
+        let channelUrl = '';
+        if (update instanceof Api.UpdateNewMessage) {
+          message = update.message as any;
+          if (!message || message.out) return;
+          const fwd = message.fwd_from;
+          channelId = fwd?.fromId?.channelId?.toString() || 'bot';
+          channelTitle = (fwd?.fromName as string) || 'Bot (forwarded)';
+          channelUrl = fwd?.fromId?.channelId ? `https://t.me/c/${fwd.fromId.channelId}` : '';
+        } else if (update instanceof Api.UpdateNewChannelMessage) {
+          message = update.message as any;
+          channelId = message.peerId?.channelId?.toString() || '';
+          // Faqat allowlist'dagi kanallar
+          const ch = getChannelByChannelId(channelId);
+          if (!ch) return;
+          channelTitle = ch.title;
+          channelUrl = ch.url || '';
+        } else {
+          return;
+        }
+        const text = typeof message.message === 'string' ? message.message : '';
+        if (!text && !message.media) return;
+        await this.processIncoming(text, message, {
           channelId,
           channelTitle,
           channelUrl,
           messageId: message.id,
           messageDate: message.date ? new Date(message.date * 1000).toISOString() : new Date().toISOString(),
-        }, null);
-      } catch (error) {
-        logger.error('Error processing bot update:', error);
+        }, getChannelByChannelId(channelId) || null);
+      } catch (e) {
+        logger.error('Bot handler error:', e);
       }
     });
   }
 
-  // Shared classification + persistence
-  private processText(text: string, meta: IncomingMeta, channel: { id: string; totalCollectedPosts: number; totalPassengerPosts: number; totalDriverPosts: number } | null): void {
+  // ---- Shared processing ----
+  private async processIncoming(
+    text: string,
+    message: any,
+    meta: IncomingMeta,
+    channel: Channel | null,
+    broadcast = true,
+    downloadMedia = true
+  ): Promise<void> {
     const result = classifyMessage(text);
 
-    if (channel) {
-      updateChannel(channel.id, {
-        totalCollectedPosts: channel.totalCollectedPosts + 1,
-        totalDriverPosts: channel.totalDriverPosts + (result.classification === 'driver' ? 1 : 0),
-        lastProcessedMessageId: meta.messageId,
-        lastEventTime: new Date().toISOString(),
-      });
-    }
-
-    // Only store passenger posts
-    if (result.classification !== 'passenger') return;
+    // FILTER: only passenger posts are kept (Mini App'ga faqat PASSENGER chiqarilsin)
+    const postType = result.type.toLowerCase() as 'passenger' | 'driver' | 'unknown';
+    if (postType !== 'passenger') return;
 
     const fingerprint = generateFingerprint(text);
     const phone = extractPhone(text);
-    const isDuplicate = !!(phone && findPostByPhone(phone)) || !!findPostByFingerprint(fingerprint);
+
+    // DUPLICATE: keep only one across channels (task #3)
+    const isDup = !!findPostByFingerprint(fingerprint) || !!(phone && findPostByPhone(phone));
+    if (isDup) return;
+
+    const mediaInfo = downloadMedia ? await this.extractMediaInfo(message) : null;
+
+    let finalText = text;
+    if (!finalText && mediaInfo?.type) {
+      finalText = mediaInfo.type === 'photo' ? "📷 Rasm e'loni" : '📎 Fayl e\'loni';
+    }
+    if (!finalText) return;
 
     const post: Post = {
       id: `${meta.channelId}_${meta.messageId}`,
@@ -176,119 +335,171 @@ class TelegramCollector {
       channelId: meta.channelId,
       channelTitle: meta.channelTitle,
       channelUrl: meta.channelUrl,
-      originalText: text,
-      normalizedText: normalizeText(text),
-      route: detectRoute(text),
-      passengerCount: extractPassengerCount(text),
-      phone,
-      username: extractUsername(text),
-      classification: result.classification,
+      originalText: finalText,
+      normalizedText: normalizeText(finalText),
+      route: result.route,
+      passengerCount: extractPassengerCount(finalText),
+      phone: result.phone ?? phone,
+      username: extractUsername(finalText),
+      classification: postType,
       confidence: result.confidence,
       duplicateFingerprint: fingerprint,
-      isDuplicate,
+      isDuplicate: false,
       messageDate: meta.messageDate,
       collectedAt: new Date().toISOString(),
+      mediaType: mediaInfo?.type || null,
+      mediaUrl: mediaInfo?.url || null,
     };
 
-    if (!isDuplicate) {
-      addPost(post);
-      if (this.onNewPost) this.onNewPost(post);
+    addPost(post); // storage enforces 65 limit (task #4)
+    if (broadcast && this.onNewPost) this.onNewPost(post); // task #5
+
+    if (channel) {
+      updateChannel(channel.id, {
+        totalCollectedPosts: channel.totalCollectedPosts + 1,
+        totalPassengerPosts: channel.totalPassengerPosts + 1,
+        lastProcessedMessageId: meta.messageId,
+        lastEventTime: new Date().toISOString(),
+      });
     }
+    logger.debug(`New passenger post from ${meta.channelTitle}`);
   }
 
-  /**
-   * Discover all channels inside a Telegram folder (e.g. "taxi") and register
-   * them as active collection channels. Matching is done by the numeric Telegram
-   * channelId so incoming messages from these channels are processed.
-   */
-  async syncFolderChannels(folderName: string): Promise<Channel[]> {
-    if (!this.client || !this.connected) {
-      throw new Error('Telegram user client not connected');
+  private async extractMediaInfo(message: any): Promise<{ type: string; url: string } | null> {
+    const media = message?.media;
+    if (!media) return null;
+    const cls = media.className;
+    let type: string | null = null;
+    if (cls === 'MessageMediaPhoto') type = 'photo';
+    else if (cls === 'MessageMediaDocument') {
+      const attrs = media.document?.attributes || [];
+      type = attrs.find((a: any) => a.className === 'DocumentAttributeVideo') ? 'video' : 'document';
     }
-
-    let filters: any;
+    if (!type) return null;
+    const client = this.botClient || this.client;
+    if (!client) return { type, url: '' };
     try {
-      filters = await this.client.invoke(new Api.messages.GetDialogFilters());
-    } catch (error) {
-      logger.error('GetDialogFilters failed:', error);
-      return [];
-    }
-
-    const list = Array.isArray(filters?.filters) ? filters.filters : [];
-    const filter = list.find(
-      (f: any) => f.className === 'DialogFilter' && f.title && f.title.toLowerCase() === folderName.toLowerCase()
-    );
-
-    if (!filter) {
-      logger.warn(`Telegram folder "${folderName}" not found. Available folders: ${list.map((f: any) => f.title).join(', ') || 'none'}`);
-      return [];
-    }
-
-    logger.info(`Syncing channels from Telegram folder "${folderName}" (id=${filter.id})`);
-
-    let dialogs: any[] = [];
-    try {
-      dialogs = await this.client.getDialogs({ folder: filter.id, limit: 200 });
-    } catch (error) {
-      logger.error('getDialogs for folder failed:', error);
-      return [];
-    }
-
-    const discovered: Channel[] = [];
-    for (const dialog of dialogs) {
-      const entity: any = dialog.entity;
-      if (!entity || entity.className !== 'Channel') continue;
-
-      const numericId = entity.id?.toString();
-      if (!numericId) continue;
-
-      const username = entity.username || '';
-      const title = entity.title || username || numericId;
-      const url = username ? `https://t.me/${username}` : `https://t.me/c/${numericId}`;
-
-      const existing = getChannelByChannelId(numericId);
-      if (existing) {
-        updateChannel(existing.id, { title, username, url, status: 'active' });
-        discovered.push({ ...existing, title, username, url, status: 'active' });
-        continue;
+      const uploadsDir = path.resolve(__dirname, '../uploads');
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      const ext = type === 'photo' ? 'jpg' : 'dat';
+      const fileName = `${message.id}_${Date.now()}.${ext}`;
+      const buffer: any = await client.downloadMedia(message, {});
+      if (buffer && buffer.length) {
+        fs.writeFileSync(path.join(uploadsDir, fileName), buffer);
+        return { type, url: `/uploads/${fileName}` };
       }
-
-      const channel = {
-        id: `ch-${numericId}`,
-        channelId: numericId,
-        username,
-        title,
-        url,
-        status: 'active' as const,
-        lastProcessedMessageId: 0,
-        lastEventTime: null,
-        totalCollectedPosts: 0,
-        totalPassengerPosts: 0,
-        totalDriverPosts: 0,
-        addedAt: new Date().toISOString(),
-      };
-      addChannel(channel);
-      discovered.push(channel);
+    } catch (e) {
+      logger.error('Media download failed:', e);
     }
-
-    logger.info(`Discovered ${discovered.length} channels from folder "${folderName}"`);
-    return discovered;
+    return { type, url: '' };
   }
 
-  onPost(handler: NewPostHandler): void {
-    this.onNewPost = handler;
+  // Backfill recent posts from a channel (used when a channel is added)
+  async backfillChannel(username: string, limit = config.storage.maxPosts): Promise<number> {
+    const client = this.client || this.botClient;
+    if (!client) return 0;
+    try {
+      const entity: any = await client.getEntity(username);
+      const messages: any[] = await client.getMessages(entity, { limit });
+      const cid = entity.id?.toString?.() || entity.channelId?.toString() || username;
+      const ch = getChannelByChannelId(cid);
+      const title = entity.title || username;
+      const url = `https://t.me/${String(username).replace('@', '')}`;
+      let count = 0;
+      for (const m of messages.slice().reverse()) {
+        const text = typeof m.message === 'string' ? m.message : '';
+        if (!text && !m.media) continue;
+        await this.processIncoming(text, m, {
+          channelId: cid,
+          channelTitle: ch?.title || title,
+          channelUrl: ch?.url || url,
+          messageId: m.id,
+          messageDate: m.date ? new Date(m.date * 1000).toISOString() : new Date().toISOString(),
+        }, ch || null, false); // silent (no toast spam)
+        count++;
+      }
+      logger.info(`Backfilled ${count} posts from ${username}`);
+      return count;
+    } catch (e) {
+      logger.error('Backfill failed for', username, e);
+      return 0;
+    }
   }
 
-  isConnected(): boolean {
-    return this.connected;
+  // Resolve a channel title (used when a channel is not registered)
+  private async resolveTitle(channelId: string): Promise<string> {
+    if (this.titleCache[channelId]) return this.titleCache[channelId];
+    const client = this.client || this.botClient;
+    if (!client) return 'Channel ' + channelId;
+    try {
+      const e: any = await client.getEntity(channelId);
+      const t = e.title || 'Channel ' + channelId;
+      this.titleCache[channelId] = t;
+      return t;
+    } catch {
+      return 'Channel ' + channelId;
+    }
   }
 
-  async disconnect(): Promise<void> {
-    if (this.client) await this.client.disconnect();
-    if (this.botClient) await this.botClient.disconnect();
-    this.connected = false;
-    this.client = null;
-    this.botClient = null;
+  // Enumerate all channels the connected client can see
+  private async enumerateChannels(): Promise<{ channelId: string; title: string; username: string; url: string }[]> {
+    const client = this.client || this.botClient;
+    if (!client) return [];
+    try {
+      const dialogs: any[] = await client.getDialogs({ limit: 200 });
+      const res: { channelId: string; title: string; username: string; url: string }[] = [];
+      for (const d of dialogs) {
+        const e = d.entity;
+        if (e && e.className === 'Channel') {
+          const username = e.username ? '@' + e.username : '';
+          res.push({
+            channelId: (e.id?.toString?.() || e.channelId?.toString()) as string,
+            title: e.title || username,
+            username,
+            url: e.username ? `https://t.me/${e.username}` : '',
+          });
+        }
+      }
+      return res;
+    } catch (e) {
+      logger.error('enumerateChannels failed:', e);
+      return [];
+    }
+  }
+
+  // Backfill passengers from ALL accessible channels for the last `days` days (task: 1-week history)
+  async backfillAll(days = 7): Promise<{ channels: number; posts: number }> {
+    const client = this.client || this.botClient;
+    if (!client) return { channels: 0, posts: 0 };
+    // Faqat ro'yxatdan o'tgan (allowlist) kanallar — barcha dialoglar emas
+    const channels = getActiveChannels();
+    const since = Date.now() - days * 864e5;
+    let total = 0;
+    for (const ch of channels) {
+      try {
+        const entity: any = await client.getEntity(ch.channelId);
+        const messages: any[] = await client.getMessages(entity, { limit: 1000 });
+        for (const m of messages) {
+          if (!m) continue;
+          const date = m.date ? new Date(m.date * 1000).getTime() : 0;
+          if (date < since) continue;
+          const text = typeof m.message === 'string' ? m.message : '';
+          if (!text && !m.media) continue;
+          await this.processIncoming(text, m, {
+            channelId: ch.channelId,
+            channelTitle: ch.title,
+            channelUrl: ch.url,
+          messageId: m.id,
+          messageDate: m.date ? new Date(m.date * 1000).toISOString() : new Date().toISOString(),
+        }, null, false, false); // silent, no media download
+        total++;
+        }
+      } catch {
+        // skip channel on error
+      }
+    }
+    logger.info(`backfillAll: ${channels.length} channels scanned, ${total} passenger posts added (last ${days}d)`);
+    return { channels: channels.length, posts: total };
   }
 }
 

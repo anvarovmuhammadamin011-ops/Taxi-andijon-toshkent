@@ -2,44 +2,37 @@ import { Router, Request, Response } from 'express';
 import { requireAdminKey } from '../middleware/auth';
 import { getChannels, addChannel, updateChannel, deleteChannel } from '../services/storage';
 import { telegramCollector } from '../services/telegram';
+import { logger } from '../utils/logger';
 import { Channel } from '../types';
 
 const router = Router();
 
-// GET /api/channels - Get all channels (public)
+// List channels (public read)
 router.get('/', (req: Request, res: Response) => {
-  const channels = getChannels();
-  res.json({ ok: true, data: channels });
+  res.json({ ok: true, data: getChannels() });
 });
 
-// POST /api/channels/sync-folder - Sync channels from a Telegram folder (owner only)
-router.post('/sync-folder', requireAdminKey, async (req: Request, res: Response) => {
-  if (!telegramCollector.isConnected()) {
-    return res.status(400).json({ ok: false, error: 'Telegram not connected. Configure TELEGRAM_SESSION first.' });
-  }
-  const folderName = req.body.folder || process.env.TELEGRAM_FOLDER || 'taxi';
-  try {
-    const channels = await telegramCollector.syncFolderChannels(folderName);
-    res.json({ ok: true, data: channels });
-  } catch (error: any) {
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-// POST /api/channels - Add new channel (owner only)
-router.post('/', requireAdminKey, (req: Request, res: Response) => {
-  const { username, title, channelId } = req.body;
-  if (!username) return res.status(400).json({ ok: false, error: 'Username required' });
-
+// Add a channel via admin panel (task: channels added through admin) + backfill
+router.post('/', requireAdminKey, async (req: Request, res: Response) => {
+  const { username, title } = req.body || {};
+  if (!username) return res.status(400).json({ ok: false, error: 'username kerak' });
   const existing = getChannels().find((c) => c.username === username);
-  if (existing) return res.status(400).json({ ok: false, error: 'Channel already exists' });
+  if (existing) return res.status(400).json({ ok: false, error: 'Kanal allaqachon mavjud' });
+
+  // Resolve numeric channelId (works with bot or user client)
+  const resolved = await telegramCollector.resolveChannel(username);
+  const channelId = resolved?.channelId || username;
+  const channelTitle = title || resolved?.title || username;
+
+  // Join (user-session) so real-time updates flow
+  telegramCollector.joinChannel(username).catch(() => {});
 
   const channel: Channel = {
     id: Date.now().toString(),
-    channelId: channelId || username,
+    channelId,
     username,
-    title: title || username,
-    url: `https://t.me/${username}`,
+    title: channelTitle,
+    url: `https://t.me/${String(username).replace('@', '')}`,
     status: 'active',
     lastProcessedMessageId: 0,
     lastEventTime: null,
@@ -48,27 +41,34 @@ router.post('/', requireAdminKey, (req: Request, res: Response) => {
     totalDriverPosts: 0,
     addedAt: new Date().toISOString(),
   };
-
   addChannel(channel);
-  res.json({ ok: true, data: channel });
+
+  // Backfill recent posts (silent)
+  const count = await telegramCollector.backfillChannel(username);
+
+  res.json({ ok: true, data: channel, backfilled: count });
 });
 
-// PATCH /api/channels/:id - Update channel (owner only)
+// Backfill ALL accessible channels for the last 7 days (admin trigger)
+router.post('/backfill-all', requireAdminKey, async (req: Request, res: Response) => {
+  const days = Number(req.body?.days) || 7;
+  const result = await telegramCollector.backfillAll(days);
+  res.json({ ok: true, ...result });
+});
+
+// Pause / resume
 router.patch('/:id', requireAdminKey, (req: Request, res: Response) => {
-  const { status, title } = req.body;
+  const { status } = req.body || {};
   const updates: Partial<Channel> = {};
-  if (status) updates.status = status;
-  if (title) updates.title = title;
-
-  const channel = updateChannel(req.params.id, updates);
-  if (!channel) return res.status(404).json({ ok: false, error: 'Channel not found' });
-  res.json({ ok: true, data: channel });
+  if (status === 'active' || status === 'paused') updates.status = status;
+  const ch = updateChannel(req.params.id, updates);
+  if (!ch) return res.status(404).json({ ok: false, error: 'Kanal topilmadi' });
+  res.json({ ok: true, data: ch });
 });
 
-// DELETE /api/channels/:id - Delete channel (owner only)
 router.delete('/:id', requireAdminKey, (req: Request, res: Response) => {
   deleteChannel(req.params.id);
   res.json({ ok: true });
 });
 
-export { router as channelsRouter };
+export default router;

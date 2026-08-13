@@ -1,11 +1,9 @@
 import fs from 'fs';
 import path from 'path';
+import bcrypt from 'bcryptjs';
 import { config } from '../config';
-import { Post, User, Channel, Settings, UserNotification, SavedPost } from '../types';
+import { Post, User, Channel, Settings, UserNotification, SavedPost, UserStatus } from '../types';
 import { logger } from '../utils/logger';
-
-// JSON File Storage - No MongoDB needed
-// Data is persisted to local JSON files
 
 const DATA_DIR = path.resolve(config.storage.dataDir);
 
@@ -25,303 +23,223 @@ let store: DataStore = {
   settings: {
     adminTelegramUsername: config.admin.telegramUsername,
     maxPosts: config.storage.maxPosts,
-    classifierThreshold: 0.6,
+    classifierThreshold: 0.5,
   },
   notifications: [],
   savedPosts: [],
 };
 
-function getFilePath(filename: string): string {
-  return path.join(DATA_DIR, filename);
+function fp(f: string): string {
+  return path.join(DATA_DIR, f);
 }
-
-function ensureDataDir(): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
+function ensureDir(): void {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 }
-
-function loadFile<T>(filename: string, defaultValue: T): T {
-  ensureDataDir();
-  const filePath = getFilePath(filename);
-  if (fs.existsSync(filePath)) {
+function load<T>(f: string, d: T): T {
+  ensureDir();
+  if (fs.existsSync(fp(f))) {
     try {
-      const raw = fs.readFileSync(filePath, 'utf8');
-      return JSON.parse(raw) as T;
-    } catch (error) {
-      logger.error(`Failed to load ${filename}:`, error);
+      return JSON.parse(fs.readFileSync(fp(f), 'utf8')) as T;
+    } catch (e) {
+      logger.error('load', f, e);
     }
   }
-  return defaultValue;
+  return d;
 }
-
-function saveFile<T>(filename: string, data: T): void {
-  ensureDataDir();
-  const filePath = getFilePath(filename);
+function save<T>(f: string, d: T): void {
+  ensureDir();
   try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-  } catch (error) {
-    logger.error(`Failed to save ${filename}:`, error);
+    fs.writeFileSync(fp(f), JSON.stringify(d, null, 2), 'utf8');
+  } catch (e) {
+    logger.error('save', f, e);
   }
 }
 
 export function loadAll(): void {
-  store.posts = loadFile<Post[]>('posts.json', []);
-  store.users = loadFile<User[]>('users.json', []);
-  store.channels = loadFile<Channel[]>('channels.json', []);
-  store.settings = loadFile<Settings>('settings.json', store.settings);
-  store.notifications = loadFile<UserNotification[]>('notifications.json', []);
-  store.savedPosts = loadFile<SavedPost[]>('saved.json', []);
+  store.posts = load<Post[]>('posts.json', []);
+  store.users = load<User[]>('users.json', []);
+  store.channels = load<Channel[]>('channels.json', []);
+  store.settings = load<Settings>('settings.json', store.settings);
+  store.notifications = load<UserNotification[]>('notifications.json', []);
+  store.savedPosts = load<SavedPost[]>('saved.json', []);
   logger.info(`Loaded ${store.posts.length} posts, ${store.users.length} users, ${store.channels.length} channels`);
   seedIfEmpty();
 }
 
 export function saveAll(): void {
-  saveFile('posts.json', store.posts);
-  saveFile('users.json', store.users);
-  saveFile('channels.json', store.channels);
-  saveFile('settings.json', store.settings);
-  saveFile('notifications.json', store.notifications);
-  saveFile('saved.json', store.savedPosts);
+  save('posts.json', store.posts);
+  save('users.json', store.users);
+  save('channels.json', store.channels);
+  save('settings.json', store.settings);
+  save('notifications.json', store.notifications);
+  save('saved.json', store.savedPosts);
 }
 
-// Seed default data on first run (empty storage)
 function seedIfEmpty(): void {
-  if (store.users.length > 0 || store.channels.length > 0) return;
-
+  if (store.users.length > 0) return;
   const now = new Date();
-  const endDate = new Date();
-  endDate.setMonth(endDate.getMonth() + 1);
-
-  addChannel({
-    id: 'ch-taxsislar',
-    channelId: 'taxsislar',
-    username: 'taxsislar',
-    title: 'Taksilar',
-    url: 'https://t.me/taxsislar',
-    status: 'active',
-    lastProcessedMessageId: 0,
-    lastEventTime: null,
-    totalCollectedPosts: 0,
-    totalPassengerPosts: 0,
-    totalDriverPosts: 0,
-    addedAt: now.toISOString(),
-  });
-
-  addUser({
-    id: 'test-user-1',
-    name: 'Test User',
-    telegramId: 8877452838,
-    login: 'test',
-    passwordHash: '$2a$10$NcKplwoOyjhHtf..5CwZ.uf/C8ekw9zQV1zdmevhdiHg135jApmHO',
-    role: 'user',
+  const end = new Date();
+  end.setMonth(end.getMonth() + 1);
+  const mk = (id: string, name: string, login: string, pw: string, role: 'admin' | 'user', tid: number): User => ({
+    id,
+    name,
+    telegramId: tid,
+    login,
+    passwordHash: bcrypt.hashSync(pw, 10),
+    role,
     status: 'active',
     monthlyPrice: 50000,
     subscriptionStart: now.toISOString(),
-    subscriptionEnd: endDate.toISOString(),
-    settings: {
-      darkMode: false,
-      notifications: true,
-      defaultRoute: 'toshkent_andijon',
-      language: 'uz',
-    },
+    subscriptionEnd: end.toISOString(),
+    settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
   });
-
-  const testTexts = [
-    { text: 'Тошкентга юрамиз 2та кам машина kerak', route: 'toshkent_andijon' as const, phone: '998218408' },
-    { text: 'Andijonga ketmoqchiman, 3 kishi, mashina kerak', route: 'andijon_toshkent' as const, phone: '901234567' },
-    { text: 'Тошкентдан Баликчига юрамиз 2 та одамимиз кам', route: 'toshkent_andijon' as const, phone: '998765432' },
-  ];
-  testTexts.forEach((p, i) => {
-    addPost({
-      id: `test-post-${Date.now()}-${i}`,
-      messageId: 1000 + i,
-      channelId: 'taxsislar',
-      channelTitle: 'Taksilar',
-      channelUrl: 'https://t.me/taxsislar',
-      originalText: p.text,
-      normalizedText: p.text.toLowerCase(),
-      route: p.route,
-      passengerCount: 2,
-      phone: p.phone,
-      username: null,
-      classification: 'passenger',
-      confidence: 0.9,
-      duplicateFingerprint: p.text.slice(0, 20),
-      isDuplicate: false,
-      messageDate: now.toISOString(),
-      collectedAt: now.toISOString(),
-    });
-  });
-
-  logger.info('Seeded default test user (test / test123), channel and sample posts');
+  store.users.push(mk('u-admin', 'Admin', 'admin', 'admin', 'admin', 0));
+  store.users.push(mk('u-test', 'Test User', 'test', 'test', 'user', 8877452838));
+  save('users.json', store.users);
+  logger.info('Seeded admin (admin/admin) and demo user (test/test)');
 }
 
-// Post operations
+// ---- Posts ----
 export function getPosts(): Post[] {
   return store.posts;
 }
-
 export function addPost(post: Post): void {
   store.posts.unshift(post);
-  // Enforce max posts limit (FIFO)
-  if (store.posts.length > store.settings.maxPosts) {
-    store.posts = store.posts.slice(0, store.settings.maxPosts);
-  }
-  saveFile('posts.json', store.posts);
+  const max = store.settings.maxPosts;
+  if (store.posts.length > max) store.posts = store.posts.slice(0, max);
+  save('posts.json', store.posts);
 }
-
 export function removePost(id: string): void {
   store.posts = store.posts.filter((p) => p.id !== id);
-  saveFile('posts.json', store.posts);
+  save('posts.json', store.posts);
 }
-
-export function findPostByFingerprint(fingerprint: string): Post | undefined {
-  return store.posts.find((p) => p.duplicateFingerprint === fingerprint);
+export function findPostByFingerprint(fp_: string): Post | undefined {
+  return store.posts.find((p) => p.duplicateFingerprint === fp_);
 }
-
 export function findPostByPhone(phone: string): Post | undefined {
   return store.posts.find((p) => p.phone === phone && p.classification === 'passenger');
 }
 
-// User operations
+// ---- Users ----
 export function getUsers(): User[] {
   return store.users;
 }
-
 export function getUserById(id: string): User | undefined {
   return store.users.find((u) => u.id === id);
 }
-
 export function getUserByLogin(login: string): User | undefined {
   return store.users.find((u) => u.login === login);
 }
-
-export function getUserByTelegramId(telegramId: number): User | undefined {
-  return store.users.find((u) => u.telegramId === telegramId);
+export function getUserByTelegramId(tid: number): User | undefined {
+  return store.users.find((u) => u.telegramId === tid && tid !== 0);
 }
-
-export function addUser(user: User): void {
-  store.users.push(user);
-  saveFile('users.json', store.users);
+export function addUser(u: User): void {
+  store.users.push(u);
+  save('users.json', store.users);
 }
-
 export function updateUser(id: string, updates: Partial<User>): User | undefined {
-  const idx = store.users.findIndex((u) => u.id === id);
-  if (idx === -1) return undefined;
-  store.users[idx] = { ...store.users[idx], ...updates, updatedAt: new Date().toISOString() };
-  saveFile('users.json', store.users);
-  return store.users[idx];
+  const i = store.users.findIndex((u) => u.id === id);
+  if (i === -1) return undefined;
+  store.users[i] = { ...store.users[i], ...updates, updatedAt: new Date().toISOString() };
+  save('users.json', store.users);
+  return store.users[i];
 }
-
 export function deleteUser(id: string): void {
   store.users = store.users.filter((u) => u.id !== id);
-  saveFile('users.json', store.users);
+  save('users.json', store.users);
 }
 
-// Channel operations
+// ---- Channels ----
 export function getChannels(): Channel[] {
   return store.channels;
 }
-
 export function getActiveChannels(): Channel[] {
   return store.channels.filter((c) => c.status === 'active');
 }
-
-export function getChannelById(id: string): Channel | undefined {
-  return store.channels.find((c) => c.id === id);
-}
-
 export function getChannelByChannelId(channelId: string): Channel | undefined {
   return store.channels.find((c) => c.channelId === channelId);
 }
-
-export function addChannel(channel: Channel): void {
-  store.channels.push(channel);
-  saveFile('channels.json', store.channels);
+export function getChannelById(id: string): Channel | undefined {
+  return store.channels.find((c) => c.id === id);
 }
-
+export function addChannel(c: Channel): void {
+  store.channels.push(c);
+  save('channels.json', store.channels);
+}
 export function updateChannel(id: string, updates: Partial<Channel>): Channel | undefined {
-  const idx = store.channels.findIndex((c) => c.id === id);
-  if (idx === -1) return undefined;
-  store.channels[idx] = { ...store.channels[idx], ...updates };
-  saveFile('channels.json', store.channels);
-  return store.channels[idx];
+  const i = store.channels.findIndex((c) => c.id === id);
+  if (i === -1) return undefined;
+  store.channels[i] = { ...store.channels[i], ...updates };
+  save('channels.json', store.channels);
+  return store.channels[i];
 }
-
 export function deleteChannel(id: string): void {
   store.channels = store.channels.filter((c) => c.id !== id);
-  saveFile('channels.json', store.channels);
+  save('channels.json', store.channels);
 }
 
-// Settings operations
+// ---- Settings ----
 export function getSettings(): Settings {
   return store.settings;
 }
-
-export function updateSettings(updates: Partial<Settings>): Settings {
-  store.settings = { ...store.settings, ...updates };
-  saveFile('settings.json', store.settings);
+export function updateSettings(u: Partial<Settings>): Settings {
+  store.settings = { ...store.settings, ...u };
+  save('settings.json', store.settings);
   return store.settings;
 }
 
-// Saved posts operations
+// ---- Saved ----
 export function getSavedPostIds(userId: string): string[] {
   return store.savedPosts
     .filter((s) => s.userId === userId)
     .sort((a, b) => b.savedAt.localeCompare(a.savedAt))
     .map((s) => s.postId);
 }
-
-export function isPostSaved(userId: string, postId: string): boolean {
-  return store.savedPosts.some((s) => s.userId === userId && s.postId === postId);
-}
-
 export function toggleSavedPost(userId: string, postId: string): { saved: boolean } {
-  const existing = store.savedPosts.find((s) => s.userId === userId && s.postId === postId);
-  if (existing) {
-    store.savedPosts = store.savedPosts.filter((s) => s !== existing);
-    saveFile('saved.json', store.savedPosts);
+  const ex = store.savedPosts.find((s) => s.userId === userId && s.postId === postId);
+  if (ex) {
+    store.savedPosts = store.savedPosts.filter((s) => s !== ex);
+    save('saved.json', store.savedPosts);
     return { saved: false };
   }
   store.savedPosts.push({ userId, postId, savedAt: new Date().toISOString() });
-  saveFile('saved.json', store.savedPosts);
+  save('saved.json', store.savedPosts);
   return { saved: true };
 }
 
-// Notifications operations
+// ---- Notifications ----
+export function addNotification(n: UserNotification): void {
+  store.notifications.push(n);
+  const userNotifs = store.notifications.filter((x) => x.userId === n.userId);
+  if (userNotifs.length > 100) {
+    const excess = userNotifs.length - 100;
+    const rm = new Set(
+      userNotifs
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        .slice(0, excess)
+        .map((x) => x.id)
+    );
+    store.notifications = store.notifications.filter((x) => !rm.has(x.id));
+  }
+  save('notifications.json', store.notifications);
+}
 export function getNotifications(userId: string): UserNotification[] {
   return store.notifications
     .filter((n) => n.userId === userId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
-
-export function getUnreadNotificationCount(userId: string): number {
-  return store.notifications.filter((n) => n.userId === userId && !n.read).length;
-}
-
-export function addNotification(notification: UserNotification): void {
-  store.notifications.push(notification);
-  // Keep max 100 notifications per user
-  const userNotifs = store.notifications.filter((n) => n.userId === notification.userId);
-  if (userNotifs.length > 100) {
-    const excess = userNotifs.length - 100;
-    const removalIds = new Set(userNotifs.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(0, excess).map((n) => n.id));
-    store.notifications = store.notifications.filter((n) => !removalIds.has(n.id));
-  }
-  saveFile('notifications.json', store.notifications);
-}
-
 export function markNotificationsRead(userId: string): void {
-  store.notifications = store.notifications.map((n) =>
-    n.userId === userId ? { ...n, read: true } : n
-  );
-  saveFile('notifications.json', store.notifications);
+  store.notifications = store.notifications.map((n) => (n.userId === userId ? { ...n, read: true } : n));
+  save('notifications.json', store.notifications);
 }
-
 export function clearNotifications(userId: string): void {
   store.notifications = store.notifications.filter((n) => n.userId !== userId);
-  saveFile('notifications.json', store.notifications);
+  save('notifications.json', store.notifications);
+}
+
+// Initialize store
+export function initStore(): void {
+  ensureDir();
 }

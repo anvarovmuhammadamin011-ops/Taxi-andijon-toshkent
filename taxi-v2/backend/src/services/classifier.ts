@@ -1,101 +1,138 @@
-import { Classification, ClassificationResult } from '../types';
-import { toLatin } from '../utils/text';
+import { RouteId } from '../types';
+import { normalizeText, extractPhone, detectRoute } from '../utils/text';
 
-interface SignalPattern {
-  pattern: RegExp;
-  weight: number;
-  description: string;
+export interface ClassifyResult {
+  type: 'PASSENGER' | 'DRIVER' | 'UNKNOWN';
+  confidence: number;
+  reason: string;
+  route: RouteId;
+  phone: string | null;
 }
 
-const PASSENGER_SIGNALS: SignalPattern[] = [
-  { pattern: /mashina\s*kerak/i, weight: 3.0, description: 'mashina kerak' },
-  { pattern: /taksi\s*kerak/i, weight: 2.5, description: 'taksi kerak' },
-  { pattern: /joy\s*kerak/i, weight: 2.5, description: 'joy kerak' },
-  { pattern: /olib\s*keting/i, weight: 2.5, description: 'olib keting' },
-  { pattern: /ketmoqchiman/i, weight: 2.5, description: 'ketmoqchiman' },
-  { pattern: /ketmoqchimiz/i, weight: 2.5, description: 'ketmoqchimiz' },
-  { pattern: /bormoqchiman/i, weight: 2.5, description: 'bormoqchiman' },
-  { pattern: /mashina\s*qidiryapman/i, weight: 3.0, description: 'mashina qidiryapman' },
-  { pattern: /yo'lovchi\s*man/i, weight: 2.0, description: "yo'lovchi man" },
-  { pattern: /menga\s+joy/i, weight: 2.0, description: 'menga joy' },
-  { pattern: /bizga\s+joy/i, weight: 2.0, description: 'bizga joy' },
-  { pattern: /ketaman/i, weight: 1.5, description: 'ketaman' },
-  { pattern: /boraman/i, weight: 1.5, description: 'boraman' },
-  { pattern: /ketamiz/i, weight: 1.5, description: 'ketamiz' },
-  { pattern: /boramiz/i, weight: 1.5, description: 'boramiz' },
-  { pattern: /ketishim\s*kerak/i, weight: 2.0, description: 'ketishim kerak' },
-  { pattern: /borishim\s*kerak/i, weight: 2.0, description: 'borishim kerak' },
-  { pattern: /kishi\s*kerak/i, weight: 1.5, description: 'kishi kerak' },
-  { pattern: /srochni/i, weight: 1.0, description: 'srochni' },
+// Mashina modellari — eng kuchli DRIVER belgisi
+const CAR_MODELS = [
+  'cobalt', 'gentra', 'jentra', 'damas', 'nexia', 'malibu', 'spark', 'matiz', 'tico',
+  'lacetti', 'jonda', 'kobilt', 'ravon', 'prius', 'camry', 'kia', 'solaris', 'labo',
+  'nexia3', 'cobalta', 'espero', 'baxor', 'tahir', 'onix', 'kobalta', 'jonli',
 ];
 
-const DRIVER_SIGNALS: SignalPattern[] = [
-  { pattern: /odam\s*olaman/i, weight: 3.0, description: 'odam olaman' },
-  { pattern: /odam\s*olamiz/i, weight: 3.0, description: 'odam olamiz' },
-  { pattern: /passajir\s*olaman/i, weight: 3.0, description: 'passajir olaman' },
-  { pattern: /yo'lovchi\s*olaman/i, weight: 3.0, description: "yo'lovchi olaman" },
-  { pattern: /odam\s*kam/i, weight: 2.5, description: 'odam kam' },
-  { pattern: /joy\s*bor/i, weight: 2.5, description: 'joy bor' },
-  { pattern: /bo'sh\s*joy/i, weight: 2.5, description: "bo'sh joy" },
-  { pattern: /bosh\s*joy/i, weight: 2.5, description: 'bosh joy' },
-  { pattern: /mashina\s*bor/i, weight: 2.0, description: 'mashina bor' },
-  { pattern: /mashina\s*bosh/i, weight: 2.5, description: 'mashina bosh' },
-  { pattern: /olib\s*ketaman/i, weight: 2.5, description: 'olib ketaman' },
-  { pattern: /pochta\s*olaman/i, weight: 2.5, description: 'pochta olaman' },
-  { pattern: /ketaman/i, weight: 1.0, description: 'ketaman (driver)' },
-  { pattern: /boraman/i, weight: 1.0, description: 'boraman (driver)' },
-  { pattern: /odam\s*bor/i, weight: 1.5, description: 'odam bor' },
-  { pattern: /mijoz\s*bor/i, weight: 2.0, description: 'mijoz bor' },
-  { pattern: /cobalt|kobalt|nexia|gentra|lacetti|matiz|damas|spark|malibu/i, weight: 1.5, description: 'car model' },
-];
+export function classifyMessage(text: string): ClassifyResult {
+  const t = normalizeText(text);
+  const route = detectRoute(text);
+  const phone = extractPhone(text);
 
-const CONFIDENCE_THRESHOLD = 0.6;
+  if (!t) {
+    return { type: 'UNKNOWN', confidence: 0, reason: 'Matn bo‘sh', route, phone };
+  }
 
-export function classifyMessage(text: string): ClassificationResult {
-  const latinText = toLatin(text.toLowerCase());
-  const cyrillicText = text.toLowerCase();
-  const combinedText = `${latinText} ${cyrillicText}`;
+  let dScore = 0;
+  let pScore = 0;
+  const dReasons: string[] = [];
+  const pReasons: string[] = [];
 
-  let passengerScore = 0;
-  let driverScore = 0;
-  const signals: string[] = [];
-
-  for (const signal of PASSENGER_SIGNALS) {
-    if (signal.pattern.test(combinedText)) {
-      passengerScore += signal.weight;
-      signals.push(`PASSENGER: ${signal.description}`);
+  // ============ DRIVER (taklif qiluvchi) belgilari ============
+  for (const m of CAR_MODELS) {
+    if (new RegExp('\\b' + m + '\\b').test(t)) {
+      dScore += 3;
+      dReasons.push(`mashina modeli: ${m}`);
     }
   }
 
-  for (const signal of DRIVER_SIGNALS) {
-    if (signal.pattern.test(combinedText)) {
-      driverScore += signal.weight;
-      signals.push(`DRIVER: ${signal.description}`);
-    }
+  if (/\b(joy|o'?rin|orin)\s+bor\b/.test(t) || /\bbo'?sh\s+joy\b/.test(t) || /\b\d+\s*ta\s+joy\b/.test(t)) {
+    dScore += 2.5;
+    dReasons.push('bo‘sh joy borligi aytilgan (taklif)');
   }
 
-  const maxScore = 10;
-  const normalizedPassenger = Math.min(passengerScore / maxScore, 1.0);
-  const normalizedDriver = Math.min(driverScore / maxScore, 1.0);
+  if (/\b(odam|yolovchi|pochta|yuk)\s+olamiz\b/.test(t) || /\bolamiz\b/.test(t) || /\bolib\s+keta/.test(t) || /\bolib\s+bor/.test(t)) {
+    dScore += 2.5;
+    dReasons.push('odam/yo‘lovchi olamiz (haydovchi)');
+  }
 
-  let classification: Classification;
+  if (/\b(mashina|avto|automobil)\s+bor\b/.test(t)) {
+    dScore += 2.5;
+    dReasons.push('mashinasi borligi aytilgan');
+  } else if (/\bavto\b/.test(t) || /\bbaga?jli\b/.test(t)) {
+    dScore += 1.5;
+    dReasons.push('avto/bagajli');
+  }
+
+  if (/\b(yuramiz|yuraman|boramiz|boraman|ketamiz|ketaman|chiqamiz|chiqaman|o'?tamiz|o'?taman)\b/.test(t)) {
+    dScore += 1.2;
+    dReasons.push('harakat fe‘li (yuramiz/ketamiz)');
+  }
+
+  if (/\b(taksi|taksist|haydovchi)\b/.test(t)) {
+    dScore += 1.5;
+    dReasons.push('taksi/haydovchi');
+  }
+
+  if (/\b(pochta|yuk)\b/.test(t)) {
+    dScore += 1.2;
+    dReasons.push('pochta/yuk');
+  }
+
+  // ============ PASSENGER (e'tiyoj qiluvchi) belgilari ============
+  if (/\b(mashina|taksi|avto)\s+kerak\b/.test(t) || /\bjoy\s+kerak\b/.test(t) || /\bo'?rin(lar)?\s+kerak\b/.test(t)) {
+    pScore += 3;
+    pReasons.push('mashina/taksi/joy kerak (e‘tiyoj)');
+  }
+
+  if (
+    /\b(borishim|ketishim|qaytishim|ketmoqchi|qaytmoqchi|chiqishim)\b/.test(t) ||
+    /moqchiman\b/.test(t) ||
+    /chiman\b/.test(t) ||
+    /\bborishim\s+kerak\b/.test(t)
+  ) {
+    pScore += 3;
+    pReasons.push('borish/chiqish istagi (yo‘lovchi)');
+  }
+
+  if (/\b(qidir|izla|izlay|qidiramiz|qidiryap)\b/.test(t)) {
+    pScore += 2.5;
+    pReasons.push('mashina qidiryapti');
+  }
+
+  if (/\b(kishimiz|yolovchimiz)\b/.test(t) || /\bbiz\s+\d+\s*kishi/.test(t) || /\b\d+\s*kishimiz\b/.test(t)) {
+    pScore += 2.5;
+    pReasons.push('o‘zini yo‘lovchi sifatida aytgan (kishimiz)');
+  }
+
+  if (/\b(olib\s+ketasiz|olib\s+ketadigan|kim\s+bor|kim\s+ketadi|qaytadigan\s+mashina\s+kerak)\b/.test(t)) {
+    pScore += 2.5;
+    pReasons.push('haydovchidan so‘rayapti');
+  }
+
+  // ============ Qaror ============
+  const dStrong = dScore >= 3;
+  const pStrong = pScore >= 3;
+
+  let type: ClassifyResult['type'];
   let confidence: number;
+  let reason: string;
 
-  if (passengerScore > driverScore && normalizedPassenger >= CONFIDENCE_THRESHOLD) {
-    classification = 'passenger';
-    confidence = normalizedPassenger;
-  } else if (driverScore > passengerScore && normalizedDriver >= CONFIDENCE_THRESHOLD) {
-    classification = 'driver';
-    confidence = normalizedDriver;
+  if (dScore === 0 && pScore === 0) {
+    type = 'UNKNOWN';
+    confidence = 0.3;
+    reason = 'Aniqlash uchun yetarli belgi yo‘q';
+  } else if (dStrong && !pStrong) {
+    type = 'DRIVER';
+    confidence = Math.min(0.99, 0.7 + dScore * 0.04);
+    reason = dReasons.join('; ');
+  } else if (pStrong && !dStrong) {
+    type = 'PASSENGER';
+    confidence = Math.min(0.99, 0.7 + pScore * 0.04);
+    reason = pReasons.join('; ');
+  } else if (dScore >= pScore) {
+    // Aralash/yoki zaif belgilar — eng katta xato (taksi posti yo‘lovchi sifatida)
+    // bo‘lmasligi uchun DRIVER tomoniga egilamiz
+    type = 'DRIVER';
+    confidence = Math.min(0.85, 0.5 + Math.max(dScore, pScore) * 0.03);
+    reason = dReasons.concat(pReasons).join('; ') || 'aralash belgilar';
   } else {
-    classification = 'unknown';
-    confidence = Math.max(normalizedPassenger, normalizedDriver);
+    type = 'PASSENGER';
+    confidence = Math.min(0.85, 0.5 + pScore * 0.03);
+    reason = pReasons.join('; ');
   }
 
-  return {
-    classification,
-    confidence,
-    scores: { passenger: normalizedPassenger, driver: normalizedDriver },
-    signals,
-  };
+  return { type, confidence, reason, route, phone };
 }

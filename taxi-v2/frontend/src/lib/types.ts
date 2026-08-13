@@ -18,6 +18,8 @@ export interface Post {
   duplicateFingerprint: string;
   messageDate: string;
   collectedAt: string;
+  mediaType?: string | null;
+  mediaUrl?: string | null;
 }
 
 export interface UserSettings {

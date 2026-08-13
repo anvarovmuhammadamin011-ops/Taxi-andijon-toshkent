@@ -1,15 +1,18 @@
-import winston from 'winston';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const logFormat = winston.format.combine(
-  winston.format.timestamp(),
-  winston.format.printf(({ timestamp, level, message, ...meta }) => {
-    const metaStr = Object.keys(meta).length ? JSON.stringify(meta) : '';
-    return `[${timestamp}] ${level.toUpperCase()}: ${message} ${metaStr}`;
-  })
-);
+const LOG_DIR = path.resolve(process.cwd(), 'logs');
+if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
 
-export const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: logFormat,
-  transports: [new winston.transports.Console()],
-});
+function ts(): string {
+  return new Date().toISOString();
+}
+
+export const logger = {
+  info: (...a: any[]) => console.log(`[${ts()}] INFO:`, ...a),
+  warn: (...a: any[]) => console.warn(`[${ts()}] WARN:`, ...a),
+  error: (...a: any[]) => console.error(`[${ts()}] ERROR:`, ...(a as any[])),
+  debug: (...a: any[]) => {
+    if (process.env.DEBUG) console.log(`[${ts()}] DEBUG:`, ...a);
+  },
+};

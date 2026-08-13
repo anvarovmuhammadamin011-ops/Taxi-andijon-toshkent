@@ -76,10 +76,36 @@ function seedIfEmpty(): void {
   const users = readUsers();
   if (users.length > 0) {
     ensureAdmin();
+    ensureDemo();
     return;
   }
-  const admin = makeAdmin();
-  writeUsers([admin]);
+  writeUsers([makeAdmin(), makeTestUser()]);
+}
+
+function makeTestUser(): LocalUser {
+  const now = new Date();
+  const end = new Date();
+  end.setMonth(end.getMonth() + 1);
+  return {
+    id: 'demo-test',
+    name: 'Test Foydalanuvchi',
+    telegramId: 0,
+    login: 'test',
+    role: 'user',
+    status: 'active',
+    monthlyPrice: 50000,
+    subscriptionStart: now.toISOString(),
+    subscriptionEnd: end.toISOString(),
+    settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
+    passwordHash: hashPassword('test'),
+    updatedAt: now.toISOString(),
+  };
+}
+
+function ensureDemo(): void {
+  const users = readUsers();
+  if (users.find((u) => u.login === 'test')) return;
+  writeUsers([...users, makeTestUser()]);
 }
 
 function makeAdmin(): LocalUser {
