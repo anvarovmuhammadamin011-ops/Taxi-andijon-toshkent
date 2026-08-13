@@ -43,6 +43,7 @@ export const config = {
     apiHash: secret('API_HASH'),
     botToken: secret('BOT_TOKEN'),
     session: secret('TELEGRAM_SESSION'),
+    webAppUrl: secret('WEB_APP_URL', 'https://taxi-andijon-toshkent.onrender.com/'),
   },
   admin: {
     key: secret('ADMIN_KEY', 'change_this_admin_key'),

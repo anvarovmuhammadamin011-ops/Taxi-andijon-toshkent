@@ -121,6 +121,7 @@ class TelegramCollector {
           this.connected = true;
           logger.info(`Telegram bot connected as @${me.username}`);
           this.setupBotHandler();
+          this.setBotMenuButton();
           this.joinRegisteredChannels();
           this.backfillAll(7).catch((e) => logger.error('backfillAll', e));
         })
@@ -135,6 +136,24 @@ class TelegramCollector {
         }
         logger.error('Telegram bot connection failed:', error);
       });
+  }
+
+  // Set the bot's menu button (Web App) so the Mini App opens from the bot.
+  private async setBotMenuButton(): Promise<void> {
+    const client = this.botClient;
+    const url = config.telegram.webAppUrl;
+    if (!client || !url) return;
+    try {
+      await client.invoke(
+        new Api.bots.SetBotMenuButton({
+          userId: 'me',
+          button: new Api.BotMenuButton({ text: 'Ochish', url }),
+        })
+      );
+      logger.info(`Bot menu button set -> ${url}`);
+    } catch (e) {
+      logger.warn('Failed to set bot menu button:', (e as any)?.errorMessage || e);
+    }
   }
 
   // Ensure channels listed in SEED_CHANNELS env are registered (survives restarts
