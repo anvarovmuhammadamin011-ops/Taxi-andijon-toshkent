@@ -1,24 +1,20 @@
 import { Router, Request, Response } from 'express';
-import { getPosts, getDriverPosts, removePost } from '../services/storage';
+import { getPosts, removePost } from '../services/storage';
 import { requireAdminKey } from '../middleware/auth';
 import { telegramCollector } from '../services/telegram';
 import { Post } from '../types';
 
-const DRIVER_SURFACE = 5;
-
 const router = Router();
 
-// GET /api/posts — public feed (task #9: all data from backend)
+// GET /api/posts — public feed (task #9: all data from backend).
+// Passenger + driver ("taxi") posts live in the SAME feed (no separate surface).
 router.get('/', (req: Request, res: Response) => {
   const route = req.query.route as string | undefined;
   const type = req.query.type as string | undefined;
   let posts: Post[] = getPosts();
   if (route && route !== 'all') posts = posts.filter((p) => p.route === route);
   if (type && type !== 'all') posts = posts.filter((p) => p.classification === type);
-  // Supplementary driver offers (up to DRIVER_SURFACE) so the feed isn't empty
-  // when passenger posts are scarce.
-  const drivers = getDriverPosts().slice(0, DRIVER_SURFACE);
-  res.json({ ok: true, data: posts, drivers, max: 65 });
+  res.json({ ok: true, data: posts, drivers: [], max: 65 });
 });
 
 // DELETE /api/posts/:id — admin removes a post (task #7)

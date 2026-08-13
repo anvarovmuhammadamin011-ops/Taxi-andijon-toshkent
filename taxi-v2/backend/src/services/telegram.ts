@@ -12,9 +12,7 @@ import {
   updateChannel,
   getChannelByChannelId,
   addPost,
-  addDriverPost,
   findPostByFingerprint,
-  findDriverPostByFingerprint,
   findPostByPhone,
 } from '../services/storage';
 import {
@@ -381,13 +379,13 @@ class TelegramCollector {
   ): Promise<void> {
     const result = classifyMessage(text);
 
-    // FILTER: passenger posts go to the main feed. Driver posts are kept in a
-    // small sample buffer (so the app isn't empty when passengers are rare).
+    // FILTER: all posts (passenger + driver/"taxi") go into the SAME main feed
+    // so they are shown together, not split. Dedupe by fingerprint across all.
     const postType = result.type.toLowerCase() as 'passenger' | 'driver' | 'unknown';
 
     if (postType === 'driver') {
       const fingerprint = generateFingerprint(text);
-      if (findDriverPostByFingerprint(fingerprint)) return;
+      if (findPostByFingerprint(fingerprint)) return;
       const driverPost: Post = {
         id: `drv_${meta.channelId}_${meta.messageId}`,
         messageId: meta.messageId,
@@ -409,8 +407,12 @@ class TelegramCollector {
         mediaType: null,
         mediaUrl: null,
       };
-      addDriverPost(driverPost);
-      if (broadcast) socketService.broadcastNewDriverPost(driverPost);
+      addPost(driverPost); // combined feed
+      if (broadcast) {
+        socketService.broadcastNewPost(driverPost);
+        if (this.onNewPost) this.onNewPost(driverPost);
+        this.forwardToBot(driverPost).catch((e) => logger.error('forwardToBot', e));
+      }
       return;
     }
 

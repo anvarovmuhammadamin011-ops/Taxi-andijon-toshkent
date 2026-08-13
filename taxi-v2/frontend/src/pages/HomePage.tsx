@@ -32,7 +32,7 @@ export default function HomePage() {
     return true;
   });
 
-  const passengerCount = posts.filter((p) => p.classification === 'passenger').length;
+  const passengerCount = posts.length;
 
   const directionLabel =
     routeFilter === 'andijon_toshkent'
@@ -71,7 +71,7 @@ export default function HomePage() {
             <span className="flex items-center gap-1.5 text-xs font-semibold text-[var(--green)]">
               <span className="w-2 h-2 rounded-full bg-[var(--green)] animate-pulse" /> LIVE
             </span>
-            <span className="text-xs text-[var(--text-secondary)]">{passengerCount} ta yangi yo’lovchi</span>
+            <span className="text-xs text-[var(--text-secondary)]">{passengerCount} ta yangi e’lon</span>
           </div>
         </div>
 
