@@ -98,7 +98,7 @@ function makeAnvarov(): LocalUser {
     subscriptionStart: now.toISOString(),
     subscriptionEnd: end.toISOString(),
     settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
-    passwordHash: hashPassword('Anvarov'),
+    passwordHash: hashPassword('anvarov'),
     updatedAt: now.toISOString(),
   };
 }
@@ -122,7 +122,7 @@ function ensureAnvarov(): void {
     subscriptionStart: now.toISOString(),
     subscriptionEnd: end.toISOString(),
     settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
-    passwordHash: hashPassword('Anvarov'),
+    passwordHash: hashPassword('anvarov'),
     updatedAt: now.toISOString(),
   };
   if (idx === -1) {
@@ -190,14 +190,14 @@ function ensureAdmin(): void {
 export function registerUser(name: string, login: string, password: string): { ok: boolean; error?: string } {
   seedIfEmpty();
   const users = readUsers();
-  if (users.find((u) => u.login === login)) return { ok: false, error: 'Bu login band' };
+  if (users.find((u) => u.login.trim().toLowerCase() === login.trim().toLowerCase())) return { ok: false, error: 'Bu login band' };
   const now = new Date();
   const end = new Date();
   end.setMonth(end.getMonth() + 1);
   const user: LocalUser = {
     id: 'u-' + Date.now(),
     name,
-    login,
+    login: login.trim(),
     telegramId: 0,
     role: 'user',
     status: 'active',
@@ -205,7 +205,7 @@ export function registerUser(name: string, login: string, password: string): { o
     subscriptionStart: now.toISOString(),
     subscriptionEnd: end.toISOString(),
     settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
-    passwordHash: hashPassword(password),
+    passwordHash: hashPassword(password.trim().toLowerCase()),
     updatedAt: now.toISOString(),
   };
   users.push(user);
@@ -216,8 +216,10 @@ export function registerUser(name: string, login: string, password: string): { o
 export function loginUser(login: string, password: string): { ok: boolean; user?: User; error?: string } {
   seedIfEmpty();
   const users = readUsers();
-  const u = users.find((x) => x.login === login);
-  if (!u || u.passwordHash !== hashPassword(password)) return { ok: false, error: "Login yoki parol noto'g'ri" };
+  const l = login.trim().toLowerCase();
+  const p = password.trim().toLowerCase();
+  const u = users.find((x) => x.login.trim().toLowerCase() === l);
+  if (!u || u.passwordHash !== hashPassword(p)) return { ok: false, error: "Login yoki parol noto'g'ri" };
   if (u.status === 'blocked') return { ok: false, error: 'Akkaunt bloklangan' };
   localStorage.setItem(SESSION_KEY, u.id);
   return { ok: true, user: strip(u) };
@@ -294,14 +296,14 @@ export interface AddUserInput {
 
 export function addUserByAdmin(input: AddUserInput): { ok: boolean; error?: string } {
   const users = readUsers();
-  if (users.find((u) => u.login === input.login)) return { ok: false, error: 'Bu login band' };
+  if (users.find((u) => u.login.trim().toLowerCase() === input.login.trim().toLowerCase())) return { ok: false, error: 'Bu login band' };
   const now = new Date();
   const end = new Date();
   end.setMonth(end.getMonth() + (input.subscriptionMonths || 1));
   const user: LocalUser = {
     id: 'u-' + Date.now(),
     name: input.name,
-    login: input.login,
+    login: input.login.trim(),
     telegramId: input.telegramId || 0,
     role: 'user',
     status: 'active',
@@ -309,7 +311,7 @@ export function addUserByAdmin(input: AddUserInput): { ok: boolean; error?: stri
     subscriptionStart: now.toISOString(),
     subscriptionEnd: end.toISOString(),
     settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
-    passwordHash: hashPassword(input.password || '123456'),
+    passwordHash: hashPassword((input.password || '123456').trim().toLowerCase()),
     updatedAt: now.toISOString(),
   };
   users.push(user);
@@ -338,7 +340,7 @@ export function updateUserAdmin(userId: string, patch: UpdateUserAdminInput): Us
   if (patch.monthlyPrice !== undefined) u.monthlyPrice = patch.monthlyPrice;
   if (patch.subscriptionEnd !== undefined) u.subscriptionEnd = patch.subscriptionEnd;
   if (patch.status !== undefined) u.status = patch.status as User['status'];
-  if (patch.password !== undefined && patch.password) u.passwordHash = hashPassword(patch.password);
+  if (patch.password !== undefined && patch.password) u.passwordHash = hashPassword(patch.password.trim().toLowerCase());
   u.updatedAt = new Date().toISOString();
   users[idx] = u;
   writeUsers(users);
