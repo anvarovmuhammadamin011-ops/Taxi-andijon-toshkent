@@ -59,6 +59,14 @@ class TelegramCollector {
     return this.connected;
   }
 
+  isUserClientConnected(): boolean {
+    return !!this.client;
+  }
+
+  isBotClientConnected(): boolean {
+    return !!this.botClient;
+  }
+
   async connect(): Promise<void> {
     const tasks: Promise<void>[] = [];
     if (config.telegram.session && config.telegram.apiId) tasks.push(this.connectUser());

@@ -8,7 +8,7 @@ import fs from 'fs';
 
 import { config } from './config';
 import { logger } from './utils/logger';
-import { loadAll } from './services/storage';
+import { loadAll, getChannels, getPosts } from './services/storage';
 import { telegramCollector } from './services/telegram';
 import { socketService } from './services/socket';
 
@@ -50,6 +50,12 @@ app.get('/api/health', (req, res) => {
     apiIdSet: config.telegram.apiId > 0,
     hasSession: config.telegram.session.length > 0,
     botTokenSet: !!config.telegram.botToken,
+    userClient: telegramCollector.isUserClientConnected(),
+    botClient: telegramCollector.isBotClientConnected(),
+    seedChannels: config.server.seedChannels.length,
+    channels: getChannels().length,
+    activeChannels: getChannels().filter((c) => c.status === 'active').length,
+    posts: getPosts().length,
   });
 });
 
