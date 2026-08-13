@@ -138,23 +138,38 @@ class TelegramCollector {
       });
   }
 
-  // Set the bot's menu button (Web App) so the Mini App opens from the bot.
+  // Set the bot's own menu button (Web App) so the Mini App opens from the bot.
+  // NOTE: a bot sets *its own* menu button via the Bot API HTTP method
+  // `setChatMenuButton` (no chat_id => default for the bot). The MTProto
+  // `bots.setBotMenuButton` is only for admins configuring a bot in a chat.
   private async setBotMenuButton(): Promise<void> {
-    const client = this.botClient;
     const url = config.telegram.webAppUrl;
-    if (!client || !url) return;
+    const token = config.telegram.botToken;
+    if (!url || !token) return;
+    const payload = {
+      menu_button: {
+        type: 'web_app',
+        text: 'Ochish',
+        web_app: { url },
+      },
+    };
     try {
-      await client.invoke(
-        new Api.bots.SetBotMenuButton({
-          userId: 'me',
-          button: new Api.BotMenuButton({ text: 'Ochish', url }),
-        })
-      );
-      logger.info(`Bot menu button set -> ${url}`);
+      const res = await fetch(`https://api.telegram.org/bot${token}/setChatMenuButton`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data: any = await res.json();
+      if (data?.ok) {
+        logger.info(`Bot menu button set -> ${url}`);
+      } else {
+        logger.warn('Failed to set bot menu button:', data?.description || data);
+      }
     } catch (e) {
-      logger.warn('Failed to set bot menu button:', (e as any)?.errorMessage || e);
+      logger.warn('Failed to set bot menu button:', (e as any)?.message || e);
     }
   }
+
 
   // Ensure channels listed in SEED_CHANNELS env are registered (survives restarts
   // without persistent disk; posts are re-backfilled on connect).
