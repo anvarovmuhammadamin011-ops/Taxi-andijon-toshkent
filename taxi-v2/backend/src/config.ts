@@ -1,9 +1,29 @@
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 dotenv.config();
 
 function num(v: string | undefined, d: number): number {
   const n = parseInt(v || '', 10);
   return isNaN(n) ? d : n;
+}
+
+// Fallback secret loader. Some hosting platforms don't reliably inject env vars
+// from the blueprint, so we also read a secrets file baked into the image.
+function loadSecretsFile(): Record<string, string> {
+  try {
+    const f = path.resolve(__dirname, '../config-secrets.json');
+    return JSON.parse(fs.readFileSync(f, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+const SECRETS = loadSecretsFile();
+function secret(name: string, d = ''): string {
+  const fromEnv = (process.env[name] || '').trim();
+  if (fromEnv) return fromEnv;
+  const fromFile = (SECRETS[name] || d).toString().trim();
+  return fromFile;
 }
 
 export const config = {
@@ -19,14 +39,14 @@ export const config = {
       .filter(Boolean),
   },
   telegram: {
-    apiId: num(process.env.API_ID, 0),
-    apiHash: (process.env.API_HASH || '').trim(),
-    botToken: (process.env.BOT_TOKEN || '').trim(),
-    session: (process.env.TELEGRAM_SESSION || '').trim(),
+    apiId: num(secret('API_ID'), 0),
+    apiHash: secret('API_HASH'),
+    botToken: secret('BOT_TOKEN'),
+    session: secret('TELEGRAM_SESSION'),
   },
   admin: {
-    key: process.env.ADMIN_KEY || 'change_this_admin_key',
-    telegramUsername: process.env.ADMIN_TELEGRAM_USERNAME || '',
+    key: secret('ADMIN_KEY', 'change_this_admin_key'),
+    telegramUsername: secret('ADMIN_TELEGRAM_USERNAME'),
   },
   storage: {
     dataDir: process.env.DATA_DIR || './data',
