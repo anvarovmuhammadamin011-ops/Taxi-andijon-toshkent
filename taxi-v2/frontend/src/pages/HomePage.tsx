@@ -6,9 +6,9 @@ import PostCard from '../components/PostCard';
 
 export default function HomePage() {
   const { posts, newPost, removePost, drivers } = usePosts();
-  const [routeFilter, setRouteFilter] = useState<string>('all');
-  const [channelFilter, setChannelFilter] = useState<string>('all');
-  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [routeFilter, setRouteFilter] = useState<string>(() => localStorage.getItem('taxi_filter_route') || 'all');
+  const [channelFilter, setChannelFilter] = useState<string>(() => localStorage.getItem('taxi_filter_channel') || 'all');
+  const [typeFilter, setTypeFilter] = useState<string>(() => localStorage.getItem('taxi_filter_type') || 'all');
   const [channels, setChannels] = useState<string[]>([]);
   const [greet] = useState(greeting());
   const [newPostFlash, setNewPostFlash] = useState(false);
@@ -26,6 +26,13 @@ export default function HomePage() {
       flashTimer.current = setTimeout(() => setNewPostFlash(false), 3000);
     }
   }, [newPost]);
+
+  // Filtr tanlovi har bir foydalanuvchi uchun saqlanadi (hamma uchun ishlaydi)
+  useEffect(() => {
+    localStorage.setItem('taxi_filter_route', routeFilter);
+    localStorage.setItem('taxi_filter_channel', channelFilter);
+    localStorage.setItem('taxi_filter_type', typeFilter);
+  }, [routeFilter, channelFilter, typeFilter]);
 
   const filtered = posts.filter((p) => {
     if (routeFilter !== 'all' && p.route !== routeFilter) return false;
