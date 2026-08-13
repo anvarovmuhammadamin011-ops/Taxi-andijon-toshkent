@@ -68,7 +68,7 @@ export function loadAll(): void {
   store.notifications = load<UserNotification[]>('notifications.json', []);
   store.savedPosts = load<SavedPost[]>('saved.json', []);
   logger.info(`Loaded ${store.posts.length} posts, ${store.driverPosts.length} driver posts, ${store.users.length} users, ${store.channels.length} channels`);
-  seedIfEmpty();
+  ensureSeedUsers();
 }
 
 export function saveAll(): void {
@@ -81,30 +81,46 @@ export function saveAll(): void {
   save('saved.json', store.savedPosts);
 }
 
-function seedIfEmpty(): void {
-  if (store.users.length > 0) return;
+// Ensures the seeded accounts exist with the desired credentials. Upserts by
+// id on every boot so changes apply even when users.json already exists.
+function ensureSeedUsers(): void {
   const now = new Date();
   const end = new Date();
   end.setMonth(end.getMonth() + 1);
-  const mk = (id: string, name: string, login: string, pw: string, role: 'admin' | 'user', tid: number): User => ({
-    id,
-    name,
-    telegramId: tid,
-    login,
-    passwordHash: bcrypt.hashSync(pw, 10),
-    role,
-    status: 'active',
-    monthlyPrice: 50000,
-    subscriptionStart: now.toISOString(),
-    subscriptionEnd: end.toISOString(),
-    settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
-    createdAt: now.toISOString(),
-    updatedAt: now.toISOString(),
-  });
-  store.users.push(mk('u-admin', 'Admin', 'admin', 'admin', 'admin', 0));
-  store.users.push(mk('u-test', 'Test User', 'test', 'test', 'user', 8877452838));
+  const upsert = (id: string, name: string, login: string, pw: string, role: 'admin' | 'user', tid: number): void => {
+    let u = store.users.find((x) => x.id === id);
+    if (!u) {
+      u = {
+        id,
+        name,
+        telegramId: tid,
+        login,
+        passwordHash: bcrypt.hashSync(pw, 10),
+        role,
+        status: 'active',
+        monthlyPrice: 50000,
+        subscriptionStart: now.toISOString(),
+        subscriptionEnd: end.toISOString(),
+        settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      } as User;
+      store.users.push(u);
+    } else {
+      u.name = name;
+      u.login = login;
+      u.passwordHash = bcrypt.hashSync(pw, 10);
+      u.telegramId = tid;
+      u.role = role;
+      u.status = 'active';
+      u.subscriptionEnd = u.subscriptionEnd && new Date(u.subscriptionEnd) > now ? u.subscriptionEnd : end.toISOString();
+      u.updatedAt = now.toISOString();
+    }
+  };
+  upsert('u-admin', 'Muhammadamin', 'muhammadamin', 'anvarovmuhammadamin', 'admin', 8197456094);
+  upsert('u-test', 'Ilyosbek', 'Ilyosbek', 'isyosbek954059494', 'user', 8877452838);
   save('users.json', store.users);
-  logger.info('Seeded admin (admin/admin) and demo user (test/test)');
+  logger.info('Ensured seeded users: admin (muhammadamin) + test (Ilyosbek)');
 }
 
 // ---- Posts ----

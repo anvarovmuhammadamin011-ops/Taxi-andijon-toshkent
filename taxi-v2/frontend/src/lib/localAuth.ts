@@ -88,24 +88,48 @@ function makeTestUser(): LocalUser {
   end.setMonth(end.getMonth() + 1);
   return {
     id: 'demo-test',
-    name: 'Test Foydalanuvchi',
-    telegramId: 0,
-    login: 'test',
+    name: 'Ilyosbek',
+    telegramId: 8877452838,
+    login: 'Ilyosbek',
     role: 'user',
     status: 'active',
     monthlyPrice: 50000,
     subscriptionStart: now.toISOString(),
     subscriptionEnd: end.toISOString(),
     settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
-    passwordHash: hashPassword('test'),
+    passwordHash: hashPassword('isyosbek954059494'),
     updatedAt: now.toISOString(),
   };
 }
 
+// Enforce the seeded test account on every load (even if already seeded) so the
+// credentials always match the owner's requested ones.
 function ensureDemo(): void {
   const users = readUsers();
-  if (users.find((u) => u.login === 'test')) return;
-  writeUsers([...users, makeTestUser()]);
+  const idx = users.findIndex((u) => u.id === 'demo-test' || u.login === 'test');
+  const now = new Date();
+  const end = new Date();
+  end.setMonth(end.getMonth() + 1);
+  const test: LocalUser = {
+    id: 'demo-test',
+    name: 'Ilyosbek',
+    telegramId: 8877452838,
+    login: 'Ilyosbek',
+    role: 'user',
+    status: 'active',
+    monthlyPrice: 50000,
+    subscriptionStart: now.toISOString(),
+    subscriptionEnd: end.toISOString(),
+    settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
+    passwordHash: hashPassword('isyosbek954059494'),
+    updatedAt: now.toISOString(),
+  };
+  if (idx === -1) {
+    users.push(test);
+  } else {
+    users[idx] = { ...users[idx], ...test, settings: users[idx].settings || test.settings };
+  }
+  writeUsers(users);
 }
 
 function makeAdmin(): LocalUser {
@@ -114,33 +138,46 @@ function makeAdmin(): LocalUser {
   end.setMonth(end.getMonth() + 1);
   return {
     id: 'local-admin',
-    name: 'Admin',
-    telegramId: 0,
-    login: 'admin',
+    name: 'Muhammadamin',
+    telegramId: 8197456094,
+    login: 'muhammadamin',
     role: 'admin',
     status: 'active',
     monthlyPrice: 50000,
     subscriptionStart: now.toISOString(),
     subscriptionEnd: end.toISOString(),
     settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
-    passwordHash: hashPassword('admin'),
+    passwordHash: hashPassword('anvarovmuhammadamin'),
     updatedAt: now.toISOString(),
   };
 }
 
 function ensureAdmin(): void {
   const users = readUsers();
-  const idx = users.findIndex((u) => u.login === 'admin');
-  const correct = hashPassword('admin');
+  const idx = users.findIndex((u) => u.id === 'local-admin' || u.login === 'admin');
+  const now = new Date();
+  const end = new Date();
+  end.setMonth(end.getMonth() + 1);
+  const admin: LocalUser = {
+    id: 'local-admin',
+    name: 'Muhammadamin',
+    telegramId: 8197456094,
+    login: 'muhammadamin',
+    role: 'admin',
+    status: 'active',
+    monthlyPrice: 50000,
+    subscriptionStart: now.toISOString(),
+    subscriptionEnd: end.toISOString(),
+    settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
+    passwordHash: hashPassword('anvarovmuhammadamin'),
+    updatedAt: now.toISOString(),
+  };
   if (idx === -1) {
-    writeUsers([...users, makeAdmin()]);
-    return;
+    users.push(admin);
+  } else {
+    users[idx] = { ...users[idx], ...admin, settings: users[idx].settings || admin.settings };
   }
-  const admin = users[idx];
-  if (admin.passwordHash !== correct) {
-    admin.passwordHash = correct;
-    writeUsers(users);
-  }
+  writeUsers(users);
 }
 
 export function registerUser(name: string, login: string, password: string): { ok: boolean; error?: string } {

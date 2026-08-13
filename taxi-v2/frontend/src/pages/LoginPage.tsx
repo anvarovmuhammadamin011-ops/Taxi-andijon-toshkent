@@ -146,7 +146,7 @@ export default function LoginPage() {
         >
           👨‍💼 Admin panelga kirish (tez)
         </button>
-        <p className="text-center text-xs text-[var(--text-secondary)] mt-2">login: admin · parol: admin</p>
+        <p className="text-center text-xs text-[var(--text-secondary)] mt-2">login: muhammadamin · parol: anvarovmuhammadamin</p>
 
         <button
           onClick={quickDemo}
@@ -154,7 +154,7 @@ export default function LoginPage() {
         >
           👤 Demo foydalanuvchi (tez)
         </button>
-        <p className="text-center text-xs text-[var(--text-secondary)] mt-2">login: test · parol: test</p>
+        <p className="text-center text-xs text-[var(--text-secondary)] mt-2">login: Ilyosbek · parol: isyosbek954059494</p>
       </div>
     </div>
   );
