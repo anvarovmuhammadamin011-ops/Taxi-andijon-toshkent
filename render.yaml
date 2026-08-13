@@ -6,7 +6,6 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
     envVars:
-      # --- non-secret config ---
       - key: NODE_ENV
         value: production
       - key: ALLOW_BROWSER_LOGIN
@@ -15,22 +14,17 @@ services:
         value: "65"
       - key: DATA_DIR
         value: "./data"
-      # Channels auto-registered on every start (survives restarts; posts re-backfill)
       - key: SEED_CHANNELS
         value: "asasharboz,Baliqchi_Chinobod_Ulugnor_107,Oltinkol_Chinobod_Baliqchi,tashkent560,taxsislar,ulugnor_baliqchi_toshkent_taksi,s_Sobir_2007,Oltinkol_Toshkent,Chinabod_Toshkent_Baliqchi,Baliqchi_Chinabot,sharxon_toshkentt"
-      # Add your Vercel/other frontend origin here if you host the UI separately
       - key: FRONTEND_URLS
-        value: "https://localhost:5173,https://taxi-collector.onrender.com"
-      # --- secrets: set these in the Render dashboard (copy from taxi-v2/backend/.env) ---
+        value: "https://localhost:5173,https://taxi-andijon-toshkent.onrender.com"
       - key: API_ID
-        sync: false
+        value: "32387150"
       - key: API_HASH
-        sync: false
+        value: "7c2a6bbae278e8cdcf9df69e16b21d7d"
       - key: TELEGRAM_SESSION
-        sync: false
+        value: "1AgAOMTQ5LjE1NC4xNjcuNDEBu7DKJnXfFypr5tx9RBX6KjyM7jX3patdm+QNsC1153rkMomJ3XpCcFJJYdZha7Wkuk18oanufQk8j6M1Br7uAgwXsBwSoJL/INd1fHrGmeuS2ihAtmkMaZLlA+5ztKEZftTaZQYE1cEJjDso1LTvFtd4YBiK69WOhTBzNHJW10ZO3LBDy8bbuxYmZezlq6q6f/el9ppDhL7u5hJrx/JjIDiUnnwLRsBczply/3IRT5AlBwowyMZAsYC3eii9X9f6+6PZjREDwgE5VKVD53KyV7m/W0x3rzCcl0EnFFh5gw3h63o39+PlXKfe29ye8RF6O/IvRHqs7sJ7+ofDAgx9bGI="
       - key: ADMIN_KEY
-        sync: false
-      - key: BOT_TOKEN
-        sync: false
+        value: "admin123"
       - key: ADMIN_TELEGRAM_USERNAME
-        sync: false
+        value: "@ilyosakataxibot"
