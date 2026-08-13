@@ -15,6 +15,9 @@ class SocketService {
   broadcastNewPost(post: Post): void {
     this.io?.emit('new-post', post);
   }
+  broadcastNewDriverPost(post: Post): void {
+    this.io?.emit('new-driver-post', post);
+  }
   broadcastRemovePost(postId: string): void {
     this.io?.emit('remove-post', postId);
   }

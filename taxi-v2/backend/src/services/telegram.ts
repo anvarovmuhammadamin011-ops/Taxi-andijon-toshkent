@@ -12,7 +12,9 @@ import {
   updateChannel,
   getChannelByChannelId,
   addPost,
+  addDriverPost,
   findPostByFingerprint,
+  findDriverPostByFingerprint,
   findPostByPhone,
 } from '../services/storage';
 import {
@@ -23,6 +25,7 @@ import {
   generateFingerprint,
 } from '../utils/text';
 import { classifyMessage } from '../services/classifier';
+import { socketService } from './socket';
 import { Post, Channel } from '../types';
 
 type NewPostHandler = (post: Post) => void;
@@ -310,8 +313,39 @@ class TelegramCollector {
   ): Promise<void> {
     const result = classifyMessage(text);
 
-    // FILTER: only passenger posts are kept (Mini App'ga faqat PASSENGER chiqarilsin)
+    // FILTER: passenger posts go to the main feed. Driver posts are kept in a
+    // small sample buffer (so the app isn't empty when passengers are rare).
     const postType = result.type.toLowerCase() as 'passenger' | 'driver' | 'unknown';
+
+    if (postType === 'driver') {
+      const fingerprint = generateFingerprint(text);
+      if (findDriverPostByFingerprint(fingerprint)) return;
+      const driverPost: Post = {
+        id: `drv_${meta.channelId}_${meta.messageId}`,
+        messageId: meta.messageId,
+        channelId: meta.channelId,
+        channelTitle: meta.channelTitle,
+        channelUrl: meta.channelUrl,
+        originalText: text,
+        normalizedText: normalizeText(text),
+        route: result.route,
+        passengerCount: null,
+        phone: result.phone ?? extractPhone(text),
+        username: extractUsername(text),
+        classification: 'driver',
+        confidence: result.confidence,
+        duplicateFingerprint: fingerprint,
+        isDuplicate: false,
+        messageDate: meta.messageDate,
+        collectedAt: new Date().toISOString(),
+        mediaType: null,
+        mediaUrl: null,
+      };
+      addDriverPost(driverPost);
+      if (broadcast) socketService.broadcastNewDriverPost(driverPost);
+      return;
+    }
+
     if (postType !== 'passenger') return;
 
     const fingerprint = generateFingerprint(text);

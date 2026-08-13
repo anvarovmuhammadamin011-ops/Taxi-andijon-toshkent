@@ -1,8 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { getPosts, removePost } from '../services/storage';
+import { getPosts, getDriverPosts, removePost } from '../services/storage';
 import { requireAdminKey } from '../middleware/auth';
 import { telegramCollector } from '../services/telegram';
 import { Post } from '../types';
+
+const DRIVER_SURFACE = 5;
 
 const router = Router();
 
@@ -13,7 +15,10 @@ router.get('/', (req: Request, res: Response) => {
   let posts: Post[] = getPosts();
   if (route && route !== 'all') posts = posts.filter((p) => p.route === route);
   if (type && type !== 'all') posts = posts.filter((p) => p.classification === type);
-  res.json({ ok: true, data: posts, max: 65 });
+  // Supplementary driver offers (up to DRIVER_SURFACE) so the feed isn't empty
+  // when passenger posts are scarce.
+  const drivers = getDriverPosts().slice(0, DRIVER_SURFACE);
+  res.json({ ok: true, data: posts, drivers, max: 65 });
 });
 
 // DELETE /api/posts/:id — admin removes a post (task #7)

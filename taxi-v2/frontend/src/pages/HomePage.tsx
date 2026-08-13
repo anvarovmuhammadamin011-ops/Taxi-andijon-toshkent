@@ -5,7 +5,7 @@ import { greeting } from '../lib/format';
 import PostCard from '../components/PostCard';
 
 export default function HomePage() {
-  const { posts, newPost, removePost } = usePosts();
+  const { posts, newPost, removePost, drivers } = usePosts();
   const [routeFilter, setRouteFilter] = useState<string>('all');
   const [channelFilter, setChannelFilter] = useState<string>('all');
   const [channels, setChannels] = useState<string[]>([]);
@@ -141,6 +141,22 @@ export default function HomePage() {
               </button>
             </div>
           ))
+        )}
+
+        {/* Haydovchi e'lonlari (namuna) — yo'lovchi kam bo'lganda ham ko'rsatiladi */}
+        {drivers.length > 0 && (
+          <section className="pt-2">
+            <h2 className="text-xs font-semibold text-[var(--text-secondary)] mb-2 px-1">
+              🚕 Haydovchi e’lonlari (namuna)
+            </h2>
+            <div className="space-y-3">
+              {drivers.map((d) => (
+                <div key={d.id} className="relative fade-in opacity-90">
+                  <PostCard post={d} />
+                </div>
+              ))}
+            </div>
+          </section>
         )}
       </main>
     </div>

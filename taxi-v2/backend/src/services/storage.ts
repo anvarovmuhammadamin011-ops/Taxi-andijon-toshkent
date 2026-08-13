@@ -9,6 +9,7 @@ const DATA_DIR = path.resolve(config.storage.dataDir);
 
 interface DataStore {
   posts: Post[];
+  driverPosts: Post[];
   users: User[];
   channels: Channel[];
   settings: Settings;
@@ -16,8 +17,11 @@ interface DataStore {
   savedPosts: SavedPost[];
 }
 
+const DRIVER_BUFFER_CAP = 20;
+
 let store: DataStore = {
   posts: [],
+  driverPosts: [],
   users: [],
   channels: [],
   settings: {
@@ -57,17 +61,19 @@ function save<T>(f: string, d: T): void {
 
 export function loadAll(): void {
   store.posts = load<Post[]>('posts.json', []);
+  store.driverPosts = load<Post[]>('driverPosts.json', []);
   store.users = load<User[]>('users.json', []);
   store.channels = load<Channel[]>('channels.json', []);
   store.settings = load<Settings>('settings.json', store.settings);
   store.notifications = load<UserNotification[]>('notifications.json', []);
   store.savedPosts = load<SavedPost[]>('saved.json', []);
-  logger.info(`Loaded ${store.posts.length} posts, ${store.users.length} users, ${store.channels.length} channels`);
+  logger.info(`Loaded ${store.posts.length} posts, ${store.driverPosts.length} driver posts, ${store.users.length} users, ${store.channels.length} channels`);
   seedIfEmpty();
 }
 
 export function saveAll(): void {
   save('posts.json', store.posts);
+  save('driverPosts.json', store.driverPosts);
   save('users.json', store.users);
   save('channels.json', store.channels);
   save('settings.json', store.settings);
@@ -120,6 +126,22 @@ export function findPostByFingerprint(fp_: string): Post | undefined {
 }
 export function findPostByPhone(phone: string): Post | undefined {
   return store.posts.find((p) => p.phone === phone && p.classification === 'passenger');
+}
+
+// ---- Driver sample buffer (supplementary feed when passengers are scarce) ----
+export function getDriverPosts(): Post[] {
+  return store.driverPosts;
+}
+export function findDriverPostByFingerprint(fp_: string): Post | undefined {
+  return store.driverPosts.find((p) => p.duplicateFingerprint === fp_);
+}
+export function addDriverPost(post: Post): void {
+  if (findDriverPostByFingerprint(post.duplicateFingerprint)) return;
+  store.driverPosts.unshift(post);
+  if (store.driverPosts.length > DRIVER_BUFFER_CAP) {
+    store.driverPosts = store.driverPosts.slice(0, DRIVER_BUFFER_CAP);
+  }
+  save('driverPosts.json', store.driverPosts);
 }
 
 // ---- Users ----

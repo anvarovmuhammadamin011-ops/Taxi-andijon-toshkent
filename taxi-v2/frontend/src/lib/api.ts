@@ -6,6 +6,7 @@ export interface ApiResponse<T> {
   ok: boolean;
   data: T;
   error?: string;
+  drivers?: any[];
 }
 
 export function getToken(): string | null {
@@ -17,7 +18,7 @@ export function getToken(): string | null {
 function normalize<T>(res: Response, json: any): ApiResponse<T> {
   const ok = json && typeof json.ok === 'boolean' ? json.ok : res.ok;
   const data = json && json.data !== undefined ? json.data : json;
-  return { ok, data, error: json?.error };
+  return { ok, data, error: json?.error, drivers: json?.drivers };
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {

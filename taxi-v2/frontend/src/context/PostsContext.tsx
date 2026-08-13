@@ -51,6 +51,7 @@ function readLocal(): Post[] {
 
 interface PostsContextType {
   posts: Post[];
+  drivers: Post[];
   newPost: Post | null;
   botConfigured: boolean;
   removePost: (id: string) => void;
@@ -60,6 +61,7 @@ interface PostsContextType {
 
 const PostsContext = createContext<PostsContextType>({
   posts: [],
+  drivers: [],
   newPost: null,
   botConfigured: false,
   removePost: () => {},
@@ -73,6 +75,7 @@ export function usePosts() {
 
 export function PostsProvider({ children }: { children: ReactNode }) {
   const [posts, setPosts] = useState<Post[]>([]);
+  const [drivers, setDrivers] = useState<Post[]>([]);
   const [newPost, setNewPost] = useState<Post | null>(null);
   const [botConfigured, setBotConfigured] = useState(false);
 
@@ -90,6 +93,7 @@ export function PostsProvider({ children }: { children: ReactNode }) {
       .then((res) => {
         if (active && res.ok) {
           setPosts(res.data);
+          setDrivers(res.drivers || []);
           setBotConfigured(true);
         } else if (active) {
           setPosts(readLocal());
@@ -116,6 +120,13 @@ export function PostsProvider({ children }: { children: ReactNode }) {
         return [incoming, ...prev].slice(0, 200);
       });
       setNewPost(incoming);
+    });
+
+    socket.on('new-driver-post', (incoming: Post) => {
+      setDrivers((prev) => {
+        if (prev.some((x) => x.duplicateFingerprint === incoming.duplicateFingerprint)) return prev;
+        return [incoming, ...prev].slice(0, 5);
+      });
     });
 
     socket.on('remove-post', (id: string) => {
@@ -149,13 +160,16 @@ export function PostsProvider({ children }: { children: ReactNode }) {
   const refresh = () => {
     api<Post[]>('/api/posts')
       .then((res) => {
-        if (res.ok) setPosts(res.data);
+        if (res.ok) {
+          setPosts(res.data);
+          setDrivers(res.drivers || []);
+        }
       })
       .catch(() => {});
   };
 
   return (
-    <PostsContext.Provider value={{ posts, newPost, botConfigured, removePost, setPosts: setPostsExternal, refresh }}>
+    <PostsContext.Provider value={{ posts, drivers, newPost, botConfigured, removePost, setPosts: setPostsExternal, refresh }}>
       {children}
       <NewPostToast post={newPost} />
     </PostsContext.Provider>
