@@ -8,6 +8,7 @@ export default function HomePage() {
   const { posts, newPost, removePost, drivers } = usePosts();
   const [routeFilter, setRouteFilter] = useState<string>('all');
   const [channelFilter, setChannelFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [channels, setChannels] = useState<string[]>([]);
   const [greet] = useState(greeting());
   const [newPostFlash, setNewPostFlash] = useState(false);
@@ -29,6 +30,7 @@ export default function HomePage() {
   const filtered = posts.filter((p) => {
     if (routeFilter !== 'all' && p.route !== routeFilter) return false;
     if (channelFilter !== 'all' && p.channelTitle !== channelFilter) return false;
+    if (typeFilter !== 'all' && p.classification !== typeFilter) return false;
     return true;
   });
 
@@ -96,6 +98,27 @@ export default function HomePage() {
           ))}
         </div>
 
+        {/* Tur bo'yicha filtr (yo'lovchi / haydovchi) */}
+        <div className="px-4 pb-3 flex gap-2 overflow-x-auto no-scrollbar">
+          {[
+            { id: 'all', label: 'Barchasi' },
+            { id: 'passenger', label: "Yo'lovchi" },
+            { id: 'driver', label: 'Haydovchi' },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTypeFilter(t.id)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                typeFilter === t.id
+                  ? 'bg-[var(--accent)] text-white'
+                  : 'bg-[var(--card)] text-[var(--text-secondary)] border border-[var(--border)]'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
         {channels.length > 1 && (
           <div className="px-4 pb-3">
             <select
@@ -144,7 +167,7 @@ export default function HomePage() {
         )}
 
         {/* Haydovchi e'lonlari (namuna) — yo'lovchi kam bo'lganda ham ko'rsatiladi */}
-        {drivers.length > 0 && (
+        {drivers.length > 0 && typeFilter !== 'driver' && (
           <section className="pt-2">
             <h2 className="text-xs font-semibold text-[var(--text-secondary)] mb-2 px-1">
               🚕 Haydovchi e’lonlari (namuna)

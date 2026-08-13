@@ -53,7 +53,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await authLogin('test', 'test');
+      const res = await authLogin('Ilyosbek', 'isyosbek954059494');
       if (res.ok) {
         navigate('/');
       } else {
