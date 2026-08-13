@@ -338,6 +338,12 @@ class TelegramCollector {
         if (update instanceof Api.UpdateNewMessage) {
           message = update.message as any;
           if (!message || message.out) return;
+          const peer = message.peerId as any;
+          if (peer?.className === 'PeerUser') {
+            // Botga shaxsiy xabar / /start → web-app ochish uchun javob
+            await this.handleBotCommand(message);
+            return;
+          }
           const fwd = message.fwd_from;
           channelId = fwd?.fromId?.channelId?.toString() || 'bot';
           channelTitle = (fwd?.fromName as string) || 'Bot (forwarded)';
@@ -366,6 +372,31 @@ class TelegramCollector {
         logger.error('Bot handler error:', e);
       }
     });
+  }
+
+  // Botga shaxsiy xabar / /start → web-app ochish uchun javob qaytaradi.
+  // Har bir /start da menyu tugmasini ham qayta o'rnatadi (safety).
+  private async handleBotCommand(message: any): Promise<void> {
+    const client = this.botClient;
+    if (!client) return;
+    const text = typeof message.message === 'string' ? message.message : '';
+    const url = config.telegram.webAppUrl;
+    if (url) this.setBotMenuButton();
+    try {
+      const isStart = text.split(/\s+/)[0] === '/start';
+      const reply = isStart
+        ? 'Assalomu alaykum! 👋\nTaxi Collector — mini-app. Quyidagi tugma orqali oching:'
+        : 'Salom! Mini-app quyidagi tugma orqali ochiladi:';
+      const buttons = url
+        ? new Api.ReplyInlineMarkup({
+            rows: [new Api.KeyboardButtonRow({ buttons: [new Api.KeyboardButtonWebView({ text: 'Ochish', url })] })],
+          })
+        : undefined;
+      await client.sendMessage(message.peerId, { message: reply, buttons });
+      logger.info('Bot replied to private message');
+    } catch (e) {
+      logger.error('Bot reply failed:', (e as any)?.message || e);
+    }
   }
 
   // ---- Shared processing ----
