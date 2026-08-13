@@ -90,14 +90,14 @@ function makeTestUser(): LocalUser {
     id: 'demo-test',
     name: 'Ilyosbek',
     telegramId: 8877452838,
-    login: 'Ilyosbek',
+    login: 'test',
     role: 'user',
     status: 'active',
     monthlyPrice: 50000,
     subscriptionStart: now.toISOString(),
     subscriptionEnd: end.toISOString(),
     settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
-    passwordHash: hashPassword('isyosbek954059494'),
+    passwordHash: hashPassword('test'),
     updatedAt: now.toISOString(),
   };
 }
@@ -114,14 +114,14 @@ function ensureDemo(): void {
     id: 'demo-test',
     name: 'Ilyosbek',
     telegramId: 8877452838,
-    login: 'Ilyosbek',
+    login: 'test',
     role: 'user',
     status: 'active',
     monthlyPrice: 50000,
     subscriptionStart: now.toISOString(),
     subscriptionEnd: end.toISOString(),
     settings: { darkMode: false, notifications: true, defaultRoute: 'toshkent_andijon', language: 'uz' },
-    passwordHash: hashPassword('isyosbek954059494'),
+    passwordHash: hashPassword('test'),
     updatedAt: now.toISOString(),
   };
   if (idx === -1) {

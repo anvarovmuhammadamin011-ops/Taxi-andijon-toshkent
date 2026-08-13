@@ -118,9 +118,9 @@ function ensureSeedUsers(): void {
     }
   };
   upsert('u-admin', 'Muhammadamin', 'muhammadamin', 'anvarovmuhammadamin', 'admin', 8197456094);
-  upsert('u-test', 'Ilyosbek', 'Ilyosbek', 'isyosbek954059494', 'user', 8877452838);
+  upsert('u-test', 'Ilyosbek', 'test', 'test', 'user', 8877452838);
   save('users.json', store.users);
-  logger.info('Ensured seeded users: admin (muhammadamin) + test (Ilyosbek)');
+  logger.info('Ensured seeded users: admin (muhammadamin) + test (test)');
 }
 
 // ---- Posts ----

@@ -53,7 +53,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await authLogin('Ilyosbek', 'isyosbek954059494');
+      const res = await authLogin('test', 'test');
       if (res.ok) {
         navigate('/');
       } else {
@@ -154,7 +154,7 @@ export default function LoginPage() {
         >
           👤 Demo foydalanuvchi (tez)
         </button>
-        <p className="text-center text-xs text-[var(--text-secondary)] mt-2">login: Ilyosbek · parol: isyosbek954059494</p>
+        <p className="text-center text-xs text-[var(--text-secondary)] mt-2">login: test · parol: test</p>
       </div>
     </div>
   );
