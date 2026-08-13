@@ -103,8 +103,11 @@ export function classifyMessage(text: string): ClassifyResult {
   }
 
   // ============ Qaror ============
-  const dStrong = dScore >= 3;
-  const pStrong = pScore >= 3;
+  // Thresholds at 1.5 (= 50% strength) so borderline posts are classified and
+  // kept instead of being dropped as UNKNOWN. Only posts with ZERO signals
+  // (dScore===0 && pScore===0) remain UNKNOWN and filtered out.
+  const dStrong = dScore >= 1.5;
+  const pStrong = pScore >= 1.5;
 
   let type: ClassifyResult['type'];
   let confidence: number;
