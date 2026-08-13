@@ -131,7 +131,9 @@ class TelegramCollector {
           this.setupBotHandler();
           this.setBotMenuButton();
           this.joinRegisteredChannels();
-          this.backfillAll(7).catch((e) => logger.error('backfillAll', e));
+          // The user session already backfills when connected; only backfill
+          // from the bot as a fallback to avoid doubling load on the container.
+          if (!this.client) this.backfillAll(7).catch((e) => logger.error('backfillAll', e));
         })
       .catch((error: any) => {
         const isFlood = error?.errorMessage === 'FLOOD' || error?.code === 420;
