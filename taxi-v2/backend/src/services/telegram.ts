@@ -43,6 +43,7 @@ interface IncomingMeta {
 class TelegramCollector {
   private client: TelegramClient | null = null; // user session (channel monitoring)
   private botClient: TelegramClient | null = null; // bot (forward + admin channels)
+  private botUsername: string | null = null; // bot's @username, for forwarding posts to it
   private connected = false;
   private onNewPost: NewPostHandler | null = null;
   private titleCache: Record<string, string> = {};
@@ -126,6 +127,7 @@ class TelegramCollector {
         .then(async () => {
           const me: any = await client.getMe();
           this.botClient = client;
+          this.botUsername = me.username;
           this.connected = true;
           logger.info(`Telegram bot connected as @${me.username}`);
           this.setupBotHandler();
@@ -180,6 +182,28 @@ class TelegramCollector {
     }
   }
 
+  // Forward a freshly-collected passenger post to the bot's own chat (so the
+  // collected posts also arrive when you open @bot). Uses the user session to
+  // send a private message to the bot. Real-time only (broadcast=true); skips
+  // posts that already came *from* the bot to avoid loops.
+  private async forwardToBot(post: Post): Promise<void> {
+    const client = this.client;
+    const to = this.botUsername;
+    if (!client || !to || post.channelId === 'bot') return;
+    try {
+      const lines = [
+        `#${post.channelTitle || post.channelId} ${post.channelUrl || ''}`.trim(),
+        post.originalText || '',
+        post.phone ? `📞 ${post.phone}` : '',
+        post.mediaUrl ? `📎 ${post.mediaUrl}` : '',
+        `🕑 ${post.collectedAt}`,
+      ].filter(Boolean);
+      await client.sendMessage(`@${to}`, { message: lines.join('\n') });
+      logger.debug(`Forwarded post ${post.id} to bot @${to}`);
+    } catch (e) {
+      logger.warn('Forward to bot failed:', (e as any)?.message || e);
+    }
+  }
 
   // Ensure channels listed in SEED_CHANNELS env are registered (survives restarts
   // without persistent disk; posts are re-backfilled on connect).
@@ -429,8 +453,9 @@ class TelegramCollector {
       mediaUrl: mediaInfo?.url || null,
     };
 
-    addPost(post); // storage enforces 65 limit (task #4)
+    addPost(post); // storage ring-buffer capped at settings.maxPosts
     if (broadcast && this.onNewPost) this.onNewPost(post); // task #5
+    if (broadcast) this.forwardToBot(post).catch((e) => logger.error('forwardToBot', e)); // also send to bot
 
     if (channel) {
       updateChannel(channel.id, {

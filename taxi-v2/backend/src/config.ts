@@ -51,6 +51,6 @@ export const config = {
   },
   storage: {
     dataDir: process.env.DATA_DIR || './data',
-    maxPosts: num(process.env.MAX_POSTS, 65),
+    maxPosts: num(secret('MAX_POSTS'), 500),
   },
 };
