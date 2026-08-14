@@ -10,6 +10,7 @@ const DATA_DIR = path.resolve(config.storage.dataDir);
 interface DataStore {
   posts: Post[];
   driverPosts: Post[];
+  passengerPosts: Post[];
   users: User[];
   channels: Channel[];
   settings: Settings;
@@ -18,10 +19,12 @@ interface DataStore {
 }
 
 const DRIVER_BUFFER_CAP = 20;
+const PASSENGER_BUFFER_CAP = 300;
 
 let store: DataStore = {
   posts: [],
   driverPosts: [],
+  passengerPosts: [],
   users: [],
   channels: [],
   settings: {
@@ -62,6 +65,7 @@ function save<T>(f: string, d: T): void {
 export function loadAll(): void {
   store.posts = load<Post[]>('posts.json', []);
   store.driverPosts = load<Post[]>('driverPosts.json', []);
+  store.passengerPosts = load<Post[]>('passengerPosts.json', []);
   store.users = load<User[]>('users.json', []);
   store.channels = load<Channel[]>('channels.json', []);
   store.settings = load<Settings>('settings.json', store.settings);
@@ -74,6 +78,7 @@ export function loadAll(): void {
 export function saveAll(): void {
   save('posts.json', store.posts);
   save('driverPosts.json', store.driverPosts);
+  save('passengerPosts.json', store.passengerPosts);
   save('users.json', store.users);
   save('channels.json', store.channels);
   save('settings.json', store.settings);
@@ -127,11 +132,25 @@ function ensureSeedUsers(): void {
 export function getPosts(): Post[] {
   return store.posts;
 }
+export function getPassengerPosts(): Post[] {
+  return store.passengerPosts;
+}
+export function findPassengerPostByFingerprint(fp_: string): Post | undefined {
+  return store.passengerPosts.find((p) => p.duplicateFingerprint === fp_);
+}
 export function addPost(post: Post): void {
   store.posts.unshift(post);
   const max = store.settings.maxPosts;
   if (store.posts.length > max) store.posts = store.posts.slice(0, max);
+  if (post.classification === 'passenger') {
+    store.passengerPosts = store.passengerPosts.filter((p) => p.id !== post.id);
+    store.passengerPosts.unshift(post);
+    if (store.passengerPosts.length > PASSENGER_BUFFER_CAP) {
+      store.passengerPosts = store.passengerPosts.slice(0, PASSENGER_BUFFER_CAP);
+    }
+  }
   save('posts.json', store.posts);
+  save('passengerPosts.json', store.passengerPosts);
 }
 export function removePost(id: string): void {
   store.posts = store.posts.filter((p) => p.id !== id);

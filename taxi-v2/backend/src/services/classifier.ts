@@ -9,11 +9,12 @@ export interface ClassifyResult {
   phone: string | null;
 }
 
-// Mashina modellari — eng kuchli DRIVER belgisi
+// Mashina modellari — eng kuchli DRIVER belgisi (transliteratsiya variantlari bilan)
 const CAR_MODELS = [
   'cobalt', 'gentra', 'jentra', 'damas', 'nexia', 'malibu', 'spark', 'matiz', 'tico',
   'lacetti', 'jonda', 'kobilt', 'ravon', 'prius', 'camry', 'kia', 'solaris', 'labo',
   'nexia3', 'cobalta', 'espero', 'baxor', 'tahir', 'onix', 'kobalta', 'jonli',
+  'kobolt', 'kublt', 'coblt', 'koblt', 'neksiya', 'jenta', 'jendira', 'cobal',
 ];
 
 export function classifyMessage(text: string): ClassifyResult {
@@ -30,7 +31,7 @@ export function classifyMessage(text: string): ClassifyResult {
   const dReasons: string[] = [];
   const pReasons: string[] = [];
 
-  // ============ DRIVER (taklif qiluvchi) belgilari ============
+  // ============ DRIVER (taklif qiluvchi / xizmat ko'rsatuvchi) ============
   for (const m of CAR_MODELS) {
     if (new RegExp('\\b' + m + '\\b').test(t)) {
       dScore += 3;
@@ -38,32 +39,32 @@ export function classifyMessage(text: string): ClassifyResult {
     }
   }
 
-  if (/\b(joy|o'?rin|orin)\s+bor\b/.test(t) || /\bbo'?sh\s+joy\b/.test(t) || /\b\d+\s*ta\s+joy\b/.test(t)) {
+  if (/\b(joy|kam|o'?rin)\s+bor\b/.test(t) || /\b\d+\s*ta\s*(kam|joy|o'?rin)\b/.test(t)) {
     dScore += 2.5;
-    dReasons.push('bo‘sh joy borligi aytilgan (taklif)');
+    dReasons.push('bo‘sh joy/kam bor (taklif)');
   }
 
-  if (/\b(odam|yolovchi|pochta|yuk)\s+olamiz\b/.test(t) || /\bolamiz\b/.test(t) || /\bolib\s+keta/.test(t) || /\bolib\s+bor/.test(t)) {
-    dScore += 2.5;
-    dReasons.push('odam/yo‘lovchi olamiz (haydovchi)');
+  if (/\b(olamiz|olib\s+ketamiz|olib\s+keta\s+olamiz|olib\s+keta\s+oladi|tashib\s+beramiz|elkamiz|olib\s+ketaman|olib\s+boramiz)\b/.test(t)) {
+    dScore += 3;
+    dReasons.push('olamiz / olib ketamiz (haydovchi)');
   }
 
   if (/\b(mashina|avto|automobil)\s+bor\b/.test(t)) {
     dScore += 2.5;
-    dReasons.push('mashinasi borligi aytilgan');
-  } else if (/\bavto\b/.test(t) || /\bbaga?jli\b/.test(t)) {
+    dReasons.push('mashinasi bor');
+  } else if (/\bavto\b/.test(t) || /\bbagaj(lar)?\b/.test(t)) {
     dScore += 1.5;
-    dReasons.push('avto/bagajli');
+    dReasons.push('avto/bagaj');
   }
 
-  if (/\b(yuramiz|yuraman|boramiz|boraman|ketamiz|ketaman|chiqamiz|chiqaman|o'?tamiz|o'?taman)\b/.test(t)) {
+  if (/\b(yuramiz|yuraman|boramiz|boraman|ketamiz|ketaman|chiqamiz|chiqaman|o'?tamiz|o'?taman|haydaymiz|haydayman)\b/.test(t)) {
     dScore += 1.2;
     dReasons.push('harakat fe‘li (yuramiz/ketamiz)');
   }
 
-  if (/\b(taksi|taksist|haydovchi)\b/.test(t)) {
+  if (/\b(taksi|taksist)\b/.test(t)) {
     dScore += 1.5;
-    dReasons.push('taksi/haydovchi');
+    dReasons.push('taksi/taksist');
   }
 
   if (/\b(pochta|yuk)\b/.test(t)) {
@@ -71,70 +72,82 @@ export function classifyMessage(text: string): ClassifyResult {
     dReasons.push('pochta/yuk');
   }
 
-  // ============ PASSENGER (e'tiyoj qiluvchi) belgilari ============
-  if (/\b(mashina|taksi|avto)\s+kerak\b/.test(t) || /\bjoy\s+kerak\b/.test(t) || /\bo'?rin(lar)?\s+kerak\b/.test(t)) {
+  // ============ PASSENGER (e'tiyoj qiluvchi / so'rovchi) ============
+  if (/\b(mashina|avto|taksi|transport|haydovchi|mashinachi|joy|o'?rin)(lar)?\s+kerak\b/.test(t)) {
     pScore += 3;
-    pReasons.push('mashina/taksi/joy kerak (e‘tiyoj)');
+    pReasons.push('mashina/joy/haydovchi kerak (e‘tiyoj)');
   }
 
-  if (
-    /\b(borishim|ketishim|qaytishim|ketmoqchi|qaytmoqchi|chiqishim)\b/.test(t) ||
-    /moqchiman\b/.test(t) ||
-    /chiman\b/.test(t) ||
-    /\bborishim\s+kerak\b/.test(t)
-  ) {
+  if (/\b(mashina|avto|taksi|transport|haydovchi|joy|o'?rin)(lar)?\s+bormi\b/.test(t)) {
     pScore += 3;
-    pReasons.push('borish/chiqish istagi (yo‘lovchi)');
+    pReasons.push('... bormi? (so‘rov)');
   }
 
-  if (/\b(qidir|izla|izlay|qidiramiz|qidiryap)\b/.test(t)) {
-    pScore += 2.5;
+  if (/\bkim\s+(bor|bormi|boradigan|ketadi|ketadigan|chiqadi|chiqadigan|qaytadi|qaytadigan|o'?tadi|haydasa|haydab)\b/.test(t)) {
+    pScore += 3;
+    pReasons.push('kim bor/ketadi (yo‘lovchi so‘rovi)');
+  }
+
+  if (/\b(qidiryapman|qidiryapmiz|qidiramiz|qidiryap|izlayapman|izlayapmiz|izlaymiz|izlayap)\b/.test(t)) {
+    pScore += 3;
     pReasons.push('mashina qidiryapti');
   }
 
-  if (/\b(kishimiz|yolovchimiz)\b/.test(t) || /\bbiz\s+\d+\s*kishi/.test(t) || /\b\d+\s*kishimiz\b/.test(t)) {
-    pScore += 2.5;
-    pReasons.push('o‘zini yo‘lovchi sifatida aytgan (kishimiz)');
+  if (/\b(borishim|ketishim|chiqishim|qaytishim|o'?tishim|tushishim)\b/.test(t)) {
+    pScore += 3;
+    pReasons.push('borish/chiqish istagi');
   }
 
-  if (/\b(olib\s+ketasiz|olib\s+ketadigan|kim\s+bor|kim\s+ketadi|qaytadigan\s+mashina\s+kerak)\b/.test(t)) {
-    pScore += 2.5;
+  if (/\b(olib\s+keta\s+olasizmi|olib\s+ketsangiz|olib\s+keta\s+oladigan|olib\s+keting|tashib\s+bering|eltib\s+bering|haydab\s+bering)\b/.test(t)) {
+    pScore += 3;
     pReasons.push('haydovchidan so‘rayapti');
   }
 
-  // ============ Qaror ============
-  // Thresholds at 1.5 (= 50% strength) so borderline posts are classified and
-  // kept instead of being dropped as UNKNOWN. Only posts with ZERO signals
-  // (dScore===0 && pScore===0) remain UNKNOWN and filtered out.
-  const dStrong = dScore >= 1.5;
-  const pStrong = pScore >= 1.5;
+  if (/\b(kishimiz|kishi\s+bormiz|kishi\s+bormikan)\b/.test(t) || /\b\d+\s+(kishi|odam|insan)\s+(uchun|bormi|kerak|bormikan)\b/.test(t)) {
+    pScore += 2.5;
+    pReasons.push('o‘zini yo‘lovchi sifatida aytgan');
+  }
 
+  if (/\b(joy|o'?rin|mashina)\s+(topib|topaylik|topishga)\b/.test(t)) {
+    pScore += 2.5;
+    pReasons.push('joy/mashina topishga harakat');
+  }
+
+  // ============ Qaror ============
   let type: ClassifyResult['type'];
   let confidence: number;
   let reason: string;
 
-  if (dScore === 0 && pScore === 0) {
+  if (pScore === 0 && dScore === 0) {
     type = 'UNKNOWN';
     confidence = 0.3;
     reason = 'Aniqlash uchun yetarli belgi yo‘q';
-  } else if (dStrong && !pStrong) {
+  } else if (dScore >= 3 && pScore <= dScore) {
+    // Aniq haydovchi taklifi (joy bor / olamiz / mashina modeli) ehtiyojga teng yoki ustun
     type = 'DRIVER';
     confidence = Math.min(0.99, 0.7 + dScore * 0.04);
-    reason = dReasons.join('; ');
-  } else if (pStrong && !dStrong) {
+    reason = dReasons.join('; ') || 'haydovchi taklifi';
+  } else if (pScore >= 3) {
+    // Aniq yo'lovchi ehtiyoji (kerak / bormi / kim bor / qidiramiz ...)
     type = 'PASSENGER';
     confidence = Math.min(0.99, 0.7 + pScore * 0.04);
-    reason = pReasons.join('; ');
-  } else if (dScore >= pScore) {
-    // Aralash/yoki zaif belgilar — eng katta xato (taksi posti yo‘lovchi sifatida)
-    // bo‘lmasligi uchun DRIVER tomoniga egilamiz
+    reason = pReasons.join('; ') || 'yo‘lovchi e‘tiyoji';
+  } else if (dScore >= 3) {
     type = 'DRIVER';
-    confidence = Math.min(0.85, 0.5 + Math.max(dScore, pScore) * 0.03);
-    reason = dReasons.concat(pReasons).join('; ') || 'aralash belgilar';
-  } else {
+    confidence = Math.min(0.95, 0.6 + dScore * 0.04);
+    reason = dReasons.join('; ');
+  } else if (pScore >= 2) {
     type = 'PASSENGER';
-    confidence = Math.min(0.85, 0.5 + pScore * 0.03);
+    confidence = Math.min(0.9, 0.55 + pScore * 0.05);
     reason = pReasons.join('; ');
+  } else if (dScore >= 2) {
+    type = 'DRIVER';
+    confidence = Math.min(0.9, 0.55 + dScore * 0.05);
+    reason = dReasons.join('; ');
+  } else {
+    type = pScore >= dScore ? 'PASSENGER' : 'DRIVER';
+    confidence = 0.5;
+    reason = pReasons.concat(dReasons).join('; ');
   }
 
   return { type, confidence, reason, route, phone };

@@ -51,6 +51,7 @@ function readLocal(): Post[] {
 
 interface PostsContextType {
   posts: Post[];
+  passengerPosts: Post[];
   drivers: Post[];
   newPost: Post | null;
   botConfigured: boolean;
@@ -61,6 +62,7 @@ interface PostsContextType {
 
 const PostsContext = createContext<PostsContextType>({
   posts: [],
+  passengerPosts: [],
   drivers: [],
   newPost: null,
   botConfigured: false,
@@ -75,6 +77,7 @@ export function usePosts() {
 
 export function PostsProvider({ children }: { children: ReactNode }) {
   const [posts, setPosts] = useState<Post[]>([]);
+  const [passengerPosts, setPassengerPosts] = useState<Post[]>([]);
   const [drivers, setDrivers] = useState<Post[]>([]);
   const [newPost, setNewPost] = useState<Post | null>(null);
   const [botConfigured, setBotConfigured] = useState(false);
@@ -103,6 +106,13 @@ export function PostsProvider({ children }: { children: ReactNode }) {
         if (active) setPosts(readLocal());
       });
 
+    // Yo'lovchi e'lonlari alohida ombordan (haydovchilar uni siqib chiqarmaydi)
+    api<Post[]>('/api/posts?type=passenger')
+      .then((res) => {
+        if (active && res.ok) setPassengerPosts(res.data);
+      })
+      .catch(() => {});
+
     // Telegram connection status
     api<{ telegram: boolean }>('/api/health')
       .then((res) => {
@@ -119,6 +129,13 @@ export function PostsProvider({ children }: { children: ReactNode }) {
         if (isDuplicate(prev, incoming)) return prev;
         return [incoming, ...prev].slice(0, 200);
       });
+      if (incoming.classification === 'passenger') {
+        setPassengerPosts((prev) => {
+          if (prev.some((x) => x.id === incoming.id)) return prev;
+          const next = [incoming, ...prev];
+          return (next.length > 300 ? next.slice(0, 300) : next);
+        });
+      }
       setNewPost(incoming);
     });
 
@@ -146,6 +163,7 @@ export function PostsProvider({ children }: { children: ReactNode }) {
   const removePost = async (id: string) => {
     // Optimistic local removal + backend delete
     setPosts((prev) => prev.filter((p) => p.id !== id));
+    setPassengerPosts((prev) => prev.filter((p) => p.id !== id));
     try {
       await apiAdmin(`/api/posts/${id}`, { method: 'DELETE' });
     } catch {
@@ -166,10 +184,15 @@ export function PostsProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {});
+    api<Post[]>('/api/posts?type=passenger')
+      .then((res) => {
+        if (res.ok) setPassengerPosts(res.data);
+      })
+      .catch(() => {});
   };
 
   return (
-    <PostsContext.Provider value={{ posts, drivers, newPost, botConfigured, removePost, setPosts: setPostsExternal, refresh }}>
+    <PostsContext.Provider value={{ posts, passengerPosts, drivers, newPost, botConfigured, removePost, setPosts: setPostsExternal, refresh }}>
       {children}
       <NewPostToast post={newPost} />
     </PostsContext.Provider>

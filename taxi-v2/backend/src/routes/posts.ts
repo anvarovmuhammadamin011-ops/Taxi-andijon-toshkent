@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getPosts, removePost } from '../services/storage';
+import { getPosts, getPassengerPosts, removePost } from '../services/storage';
 import { requireAdminKey } from '../middleware/auth';
 import { telegramCollector } from '../services/telegram';
 import { Post } from '../types';
@@ -11,7 +11,9 @@ const router = Router();
 router.get('/', (req: Request, res: Response) => {
   const route = req.query.route as string | undefined;
   const type = req.query.type as string | undefined;
-  let posts: Post[] = getPosts();
+  // Yo'lovchi e'lonlari alohida (buzilmagan) ombordan keladi — haydovchi
+  // e'lonlari uni siqib chiqarolmaydi, shuning uchun filtr doim ishlaydi.
+  let posts: Post[] = type === 'passenger' ? getPassengerPosts() : getPosts();
   if (route && route !== 'all') posts = posts.filter((p) => p.route === route);
   if (type && type !== 'all') posts = posts.filter((p) => p.classification === type);
   res.json({ ok: true, data: posts, drivers: [], max: 65 });

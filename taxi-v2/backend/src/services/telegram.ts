@@ -14,6 +14,7 @@ import {
   addPost,
   findPostByFingerprint,
   findPostByPhone,
+  findPassengerPostByFingerprint,
 } from '../services/storage';
 import {
   normalizeText,
@@ -452,8 +453,9 @@ class TelegramCollector {
     const fingerprint = generateFingerprint(text);
     const phone = extractPhone(text);
 
-    // DUPLICATE: keep only one across channels (task #3)
-    const isDup = !!findPostByFingerprint(fingerprint) || !!(phone && findPostByPhone(phone));
+    // DUPLICATE: faqat yo'lovchi e'lonlari orasida (haydovchi posti
+    // yo'lovchini "duplicate" deb o'chira olmaydi)
+    const isDup = !!findPassengerPostByFingerprint(fingerprint) || !!(phone && findPostByPhone(phone));
     if (isDup) return;
 
     const mediaInfo = downloadMedia ? await this.extractMediaInfo(message) : null;

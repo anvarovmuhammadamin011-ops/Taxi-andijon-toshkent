@@ -5,7 +5,7 @@ import { greeting } from '../lib/format';
 import PostCard from '../components/PostCard';
 
 export default function HomePage() {
-  const { posts, newPost, removePost, drivers } = usePosts();
+  const { posts, passengerPosts, newPost, removePost, drivers } = usePosts();
   const [routeFilter, setRouteFilter] = useState<string>(() => localStorage.getItem('taxi_filter_route') || 'all');
   const [channelFilter, setChannelFilter] = useState<string>(() => localStorage.getItem('taxi_filter_channel') || 'all');
   const [typeFilter, setTypeFilter] = useState<string>(() => localStorage.getItem('taxi_filter_type') || 'all');
@@ -34,14 +34,18 @@ export default function HomePage() {
     localStorage.setItem('taxi_filter_type', typeFilter);
   }, [routeFilter, channelFilter, typeFilter]);
 
-  const filtered = posts.filter((p) => {
+  // Yo'lovchi filtri alohida (buzilmagan) ro'yxatdan oladi — haydovchilar
+// ko'p bo'lsa ham yo'lovchilar yo'qolib ketmaydi.
+const baseList = typeFilter === 'passenger' ? passengerPosts : posts;
+
+const filtered = baseList.filter((p) => {
     if (routeFilter !== 'all' && p.route !== routeFilter) return false;
     if (channelFilter !== 'all' && p.channelTitle !== channelFilter) return false;
     if (typeFilter !== 'all' && p.classification !== typeFilter) return false;
     return true;
   });
 
-  const passengerCount = posts.length;
+  const passengerCount = baseList.length;
 
   const directionLabel =
     routeFilter === 'andijon_toshkent'
