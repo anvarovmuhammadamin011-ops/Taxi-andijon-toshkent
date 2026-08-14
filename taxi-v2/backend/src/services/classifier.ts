@@ -113,6 +113,23 @@ export function classifyMessage(text: string): ClassifyResult {
     pReasons.push('joy/mashina topishga harakat');
   }
 
+  // Aniq yo'nalish (Toshkent↔Andijon) + kishi soni yoki so'rov so'zi bo'lsa —
+  // "Andijonga bormi, 1 kishi" kabi qisqa yo'lovchi e'lonlari ham tushsin.
+  if (
+    route !== 'unknown' &&
+    (/\b\d+\s*(kishi|odam|insan)\b/.test(t) || /\b(bormi|bormikan|boradigan|ketadigan|chiqadigan)\b/.test(t))
+  ) {
+    pScore += 2;
+    pReasons.push('yo‘nalishli yo‘lovchi so‘rovi');
+  }
+
+  // Transport konteksti: mashina/taksi/joy/yo'lovchi so'zi yoki aniq yo'nalish
+  // bo'lmasa, bu taxi e'loni EMAS (masalan "qiz izlayapman", "subbatdosh kerak"
+  // kabi e'lonlar taxi deb olinmasligi uchun).
+  const hasTransportContext =
+    /\b(mashina|avto|taksi|taxi|transport|haydovchi|mashinachi|joy|o'?rin|kishi|odam|yo'lovchi|passajir|sarf|narx)\b/.test(t) ||
+    route !== 'unknown';
+
   // ============ Qaror ============
   let type: ClassifyResult['type'];
   let confidence: number;
@@ -148,6 +165,12 @@ export function classifyMessage(text: string): ClassifyResult {
     type = pScore >= dScore ? 'PASSENGER' : 'DRIVER';
     confidence = 0.5;
     reason = pReasons.concat(dReasons).join('; ');
+  }
+
+  if (!hasTransportContext && type !== 'UNKNOWN') {
+    type = 'UNKNOWN';
+    confidence = Math.min(confidence, 0.3);
+    reason = 'Transport konteksti yo‘q';
   }
 
   return { type, confidence, reason, route, phone };
